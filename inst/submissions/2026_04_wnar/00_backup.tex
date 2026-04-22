@@ -1,0 +1,490 @@
+%  FedGEE manuscript for WNAR Student Paper Competition
+%  Using Biometrics template
+%
+\documentclass[useAMS,referee]{biom}
+
+%%%%% MACROS %%%%%
+\usepackage{amsmath, amssymb, mathtools}
+\newcommand{\tr}{\mbox{tr}}
+\DeclareMathOperator{\logit}{logit}
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title[FedGEE: Federated GEE for Privacy-Preserving Inference]{FedGEE: Federated Generalized Estimating Equations for Privacy-Preserving Population-Level Inference for Multicenter Longitudinal Data}
+
+\author
+{Feier Chang$^{1,*}$\email{fec54@pitt.edu} and
+Soumik Purkayastha$^{1}$ \\
+$^{1}$Department of Biostatistics and Health Data Science, \\University of Pittsburgh,
+Pittsburgh, Pennsylvania, U.S.A.}
+
+\begin{document}
+\date{}
+
+\pagerange{\pageref{firstpage}--\pageref{lastpage}}
+\volume{00}
+\pubyear{2026}
+\artmonth{March}
+\doi{00.0000/j.0000-0000.0000.00000.x}
+
+\label{firstpage}
+
+\begin{abstract}
+Multi-site studies of binary outcomes frequently encounter two simultaneous constraints: a multilevel data structure that induces within-cluster correlation and privacy regulations that prohibit centralizing patient-level records. We develop FedGEE, a federated Generalized Estimating Equations protocol that addresses both constraints by decomposing the GEE estimating equations across sites. Each site transmits only low-dimensional summary matrices---a $p \times p$ bread matrix, a $p \times 1$ score vector, and a $p \times p$ meat matrix---to a coordinating center, which aggregates them to produce global parameter estimates and sandwich variance estimates identical to those from a pooled analysis. We justify the population-average estimand as the appropriate target for system-level policy questions, demonstrate that the federated protocol exactly reproduces pooled GEE (including recovery of site-level covariates despite within-site rank deficiency), and show through simulation that a naive meta-analytic alternative produces anti-conservative inference under realistic correlation structures. The method is motivated by and applied to the study of Medications for Alcohol Use Disorder (MAUD) prescribing across more than 130 Veterans Health Administration medical centers.
+\end{abstract}
+
+\begin{keywords}
+Clustered data; Federated learning; Generalized estimating equations; Population-average inference; Privacy-preserving analysis; Sandwich variance estimator.
+\end{keywords}
+
+\maketitle
+
+%% ============================================================
+%%  1. INTRODUCTION
+%% ============================================================
+\section{Introduction}
+\label{s:intro}
+
+The Veterans Health Administration (VHA) is the largest integrated health care system in the United States, maintaining electronic health records across more than 130 VA medical centers (VAMCs). Researchers studying the treatment of Alcohol Use Disorder (AUD) have access to a clinically important binary outcome: whether or not a patient was discharged with a medication for AUD (MAUD), such as naltrexone, acamprosate, or disulfiram, along with clinical predictors including demographics, comorbidities, prior utilization, and treatment history. Understanding what clinical features predict MAUD prescribing, and whether prescribing rates vary systematically across hospitals, has direct implications for quality improvement and resource allocation across the VA system.
+
+The data have a natural multilevel structure: encounters are nested within patients, and patients are nested within hospitals. Any regression analysis must account for the correlation induced by this clustering, or standard errors will be understated and inferences unreliable. Two dominant frameworks exist for clustered data: Generalized Linear Mixed Models (GLMMs) and Generalized Estimating Equations (GEE) \cite{zeger1988models}. These estimate fundamentally different quantities---subject-specific and population-average effects, respectively---and the choice between them should be driven by the scientific question.
+
+Data governance and strict HIPAA compliance---applicable to both the VA and external hospital systems---dictate our analytic approach. Although intra-VA data pooling is technically feasible, extracting patient-level records from local facilities carries an unacceptable risk of data leakage, effectively ruling out a centralized pooled analysis. A federated analysis framework mitigates this risk by keeping raw data at each local site and transmitting only aggregate summary statistics to a central hub. While federated methods for GLMMs exist \cite{luo2022dlmm}, our goal is to provide a complementary toolkit using GEE. GEE is particularly well suited for federation: the estimating equations naturally decompose across clusters, enabling local computation at each site and subsequent aggregation at the coordinating center to produce global parameter estimates.
+
+This paper develops and evaluates a federated GEE protocol for multi-site analysis of MAUD prescribing across VA hospitals. We make three contributions. First, we articulate why the population-average estimand is the appropriate target for the policy questions motivating this work, and how it differs from the subject-specific estimand that a GLMM would provide (Section~\ref{s:estimands}). Second, we present the federated estimation protocol---including iterative Fisher scoring, the sandwich variance estimator, and handling of hospital-level covariates---and demonstrate through simulation that federated GEE exactly reproduces pooled GEE while a naive meta-analytic alternative produces dangerously anti-conservative inference under realistic correlation structures (Sections~\ref{s:method}--\ref{s:simulations}). Third, we apply the method to VA data on MAUD prescribing (Section~\ref{s:application}).
+
+
+%% ============================================================
+%%  2. BACKGROUND: ESTIMANDS
+%% ============================================================
+\section{Background: Population-Average and Subject-Specific Estimands}
+\label{s:estimands}
+Consider a binary outcome $Y_{ij}$ (visit $j$ for patient $i$) with predictor vector $\mathbf{x}_{ij}$. A GLMM estimates subject-specific effects via a conditional model:
+\begin{equation}
+\logit\, P(Y_{ij} = 1 \mid b_i) = \mathbf{x}_{ij}^{\top} \boldsymbol{\beta} + b_i, \quad b_i \sim N(0, \sigma^2).
+\label{eq:glmm}
+\end{equation}
+For the AUD application, $\boldsymbol{\beta}$ answers: \emph{For a given patient at a specific hospital, how do the odds of receiving MAUD change?} In contrast, GEE specifies the marginal response:
+\begin{equation}
+\logit\, P(Y_{ij} = 1) = \mathbf{x}_{ij}^{\top} \boldsymbol{\beta}^*.
+\label{eq:gee}
+\end{equation}
+The coefficient $\boldsymbol{\beta}^*$ has a population-average interpretation: \emph{Across the entire VA population of patients and hospitals, how do the odds of receiving MAUD change?}. In a logistic model, marginal and conditional coefficients do not coincide; specifically, $|\boldsymbol{\beta}^*| < |\boldsymbol{\beta}|$. The non-linearity of the logit link means that averaging over the distribution of random effects compresses predicted probabilities toward the mean, and this attenuation grows with $\sigma^2$. Greater between-cluster heterogeneity results in a larger gap between the two estimands (Zeger, Liang, and Albert, 1988).
+
+While one could theoretically fit a GLMM and integrate out the random effects to obtain a population-average estimate, this approach relies heavily on the assumed (typically Gaussian) distribution of the random effects. If the true random effects across VA hospitals are skewed or heavy-tailed, these marginalized predictions will be biased. GEE avoids this vulnerability because it is semiparametric: only the marginal mean model needs to be correctly specified. In a federated setting where local random-effect distributions are difficult to diagnose across sites, this robustness is a major practical advantage.
+
+The primary policy question---\emph{What clinical features predict whether a patient is discharged with MAUD, and how do system-level prescribing rates vary with patient characteristics?}---is a population-average question. The goal is to inform resource allocation, guideline development, and quality benchmarking across the VA system, not to produce individual-patient predictions. The population-average effect estimated by GEE is therefore the natural target. This framing motivates the federated GEE approach developed in the next section.
+
+\section{Federated GEE: Method}
+\label{s:method}
+
+The federated GEE solves the same estimating equations as a pooled GEE but decomposes the computation across sites. We use iterative Fisher scoring with an independence working correlation as the default and a sandwich variance estimator clustered at the hospital (site) level. Let there be $K$ hospitals (sites), with hospital $k$ holding data $(\mathbf{Y}_k, \mathbf{X}_k)$. The coordinating center maintains the current parameter estimate $\hat{\boldsymbol{\beta}}$ and broadcasts it to all sites at each iteration. The protocol proceeds as follows (see also Figure~\ref{f:protocol}).
+
+\noindent\textbf{Step 1: Site-level computation.} Given $\hat{\boldsymbol{\beta}}$, each site $k$ computes fitted values $\hat{\mu}_{kj} = \logit^{-1}(\mathbf{x}_{kj}^{\top} \hat{\boldsymbol{\beta}})$ and transmits three summary matrices:
+\begin{itemize}
+\item \textbf{Bread:} $\mathbf{B}_k = \mathbf{X}_k^{\top} \, \mbox{diag}(\hat{\mu}_k \odot (1 - \hat{\mu}_k)) \, \mathbf{X}_k$ \quad ($p \times p$)
+\item \textbf{Score:} $\mathbf{S}_k = \mathbf{X}_k^{\top} (\mathbf{Y}_k - \hat{\boldsymbol{\mu}}_k)$ \quad ($p \times 1$)
+\item \textbf{Meat:} $\mathbf{M}_k = \mathbf{S}_k \mathbf{S}_k^{\top}$ \quad ($p \times p$)
+\end{itemize}
+No patient-level data leaves the site.
+
+\medskip
+\noindent\textbf{Step 2: Coordinating center.} The center aggregates across sites: $\mathbf{B} = \sum_k \mathbf{B}_k$, $\mathbf{S} = \sum_k \mathbf{S}_k$, $\mathbf{M} = \sum_k \mathbf{M}_k$. It then updates:
+\begin{equation}
+\hat{\boldsymbol{\beta}}^{\text{new}} = \hat{\boldsymbol{\beta}}^{\text{old}} + \mathbf{B}^{-1} \mathbf{S}
+\label{eq:update}
+\end{equation}
+and broadcasts $\hat{\boldsymbol{\beta}}^{\text{new}}$ for the next round. Iteration continues until convergence ($\max |\delta| < \epsilon$).
+
+\medskip
+\noindent\textbf{Step 3: Sandwich variance.} At convergence, the robust variance estimate is assembled from the final aggregated bread and meat:
+\begin{equation}
+\widehat{\mbox{Var}}(\hat{\boldsymbol{\beta}}) = \mathbf{B}^{-1} \mathbf{M} \, \mathbf{B}^{-1}.
+\label{eq:sandwich}
+\end{equation}
+This is identical to the pooled sandwich estimator because the bread and meat are additive across clusters (sites).
+
+\begin{remark}
+    A hospital-level covariate such as teaching status or bed count is constant within each site. This makes the local design matrix rank-deficient at every site: the teaching column is collinear with the intercept within any single hospital. However, the federated protocol aggregates the bread matrices \emph{before} inversion. Because different hospitals have different values of the hospital-level covariate, the summed bread matrix $\mathbf{B} = \sum_k \mathbf{B}_k$ is full rank even though each $\mathbf{B}_k$ is singular. The same logic applies to any between-site covariate: geographic region, staffing ratio, or academic affiliation.
+\end{remark}
+
+\begin{remark}
+The sandwich variance estimator is consistent as the number of independent clusters $K \to \infty$. With few hospitals, it systematically underestimates variance, producing anti-conservative confidence intervals. Bias-corrected variants, such as the Mancl--DeRouen \cite{mancl2001covariance} or Fay--Graubard \cite{fay2001small} corrections, inflate the residual contribution from cluster $k$ by a factor of $(\mathbf{I} - \mathbf{H}_{kk})^{-1/2}$, where $\mathbf{H}_{kk}$ is the leverage of cluster $k$. This is analogous to the HC2/HC3 corrections for heteroskedasticity-robust inference in OLS. Crucially, these corrections are compatible with federation: each site can compute its own leverage contribution and apply the correction locally before transmitting the meat matrix. For the VA application with 130--170 medical centers, the uncorrected sandwich should perform adequately. However, if analyses are restricted to subsets of hospitals---for instance, hospitals within a particular Veterans Integrated Service Network (VISN)---the bias-corrected variants should be used.
+\end{remark}
+
+\section{Simulation Studies}
+\label{s:simulations}
+
+All simulations use a nested copula construction that produces correlated binary outcomes while preserving exact marginal probabilities. For patient $i$ at hospital $h$, visit $j$, the latent variable is:
+\begin{equation}
+Z_{hij} = \sqrt{\rho_H}\; U_h + \sqrt{\rho_P - \rho_H}\; W_{hi} + \sqrt{1 - \rho_P}\; \epsilon_{hij}
+\label{eq:copula}
+\end{equation}
+where $U_h \sim N(0,1)$ is a hospital-level draw shared across all observations at hospital $h$, $W_{hi} \sim N(0,1)$ is a patient-level draw shared across patient $i$'s visits, and $\epsilon_{hij} \sim N(0,1)$ is visit-level noise. All components are independent. Since the variance sums to unity, each $Z_{hij} \sim N(0,1)$ marginally. The outcome is set to $Y_{hij} = \mathbf{1}(Z_{hij} < \Phi^{-1}(p_{hij}))$ where $p_{hij} = \logit^{-1}(\mathbf{x}_{hij}^{\top} \boldsymbol{\beta})$, guaranteeing $P(Y_{hij} = 1) = p_{hij}$ exactly.
+
+The induced correlation structure is nested: within-patient correlation is $\rho_P$, between-patient same-hospital correlation is $\rho_H$, and between-hospital correlation is zero. The constraint $\rho_P \geq \rho_H \geq 0$ must hold. Unless stated otherwise, we set $\boldsymbol{\beta} = (-1, 1)^{\top}$, use 20 hospitals with 15 patients each and 2--6 visits per patient.
+
+
+\subsection{Simulation 1: Federated GEE vs.\ Pooled GEE vs.\ Meta-Analytic GLM}
+\label{s:sim1}
+The first simulation compares three strategies for multi-site analysis under data constraints. \emph{Federated GEE} uses the iterative score-aggregation protocol described in Section~\ref{s:protocol}; sites share only summary matrices. \emph{Pooled GEE} fits GEE on the full stacked dataset---the gold standard, feasible only if all data can be centralized. \emph{Meta-analytic GLM} fits a separate logistic regression at each site and combines site-level estimates via inverse-variance weighted meta-analysis---the simplest no-data-sharing approach.
+
+We sweep across combinations of hospital-level correlation $\rho_H \in \{0, 0.1, 0.3\}$ and patient-level correlation $\rho_P \in \{0.2, 0.5, 0.8\}$ (subject to $\rho_P > \rho_H$), running 200 replications at each setting. We report mean absolute bias relative to the true $\beta_x = 1$ and empirical coverage of nominal 95\% confidence intervals (Table~\ref{t:sim1}).
+
+Federated and pooled GEE produce identical mean absolute bias and coverage across all settings, confirming that federation is an exact decomposition of the pooled estimating equation, not an approximation. The meta-analytic GLM, by contrast, ignores within-cluster correlation at the estimation stage: site-level GLM standard errors are too small, the inverse-variance weights are distorted, and the combined standard error is anti-conservative. At $\rho_H = 0.3$, coverage of the meta-analytic approach collapses to 53--56\%, making it unsuitable for settings with non-trivial between-hospital heterogeneity. With small site-level samples and binary outcomes, separation or near-separation at individual sites can also produce extreme estimates that destabilize the meta-analytic combination.
+
+
+\subsection{Simulation 2: GEE vs.\ GLMM Under Nested Clustering}
+\label{s:sim2}
+
+This simulation reinforces the estimand discussion in Section~\ref{s:estimands}. The true marginal $\beta_x = 1$ by construction. We fix $\rho_P = 0.5$ and sweep $\rho_H$ from 0 to 0.45 to show how increasing hospital-level heterogeneity affects the GLMM--GEE divergence (Figure~\ref{f:gee-glmm}).
+
+The GEE line remains flat at 1 because the marginal model is correct by construction. The GLMM estimates the conditional effect, which must exceed the marginal effect for logistic models, and the gap widens with $\rho_H$ as greater hospital-level heterogeneity increases the attenuation when marginalizing. Neither estimator is wrong; each is consistent for its own target. This underscores the importance of choosing the modeling framework based on the scientific question.
+
+
+\subsection{Simulation 3: Hospital-Level Covariates}
+\label{s:sim3}
+
+A hospital-level covariate (teaching status, true $\beta_{\text{teach}} = 0.5$) is constant within each site, making the local design matrix rank-deficient. We demonstrate that federated GEE recovers this coefficient because the bread matrices are summed before inversion (Figure~\ref{f:teaching}).
+
+Across 30 replications, the mean estimate is 0.438 (true value 0.500), the mean standard error is 0.297, and the empirical standard deviation is 0.241. Critically, the maximum absolute difference between federated and pooled GEE estimates is $2.78 \times 10^{-16}$---floating-point precision. Every site's $\mathbf{B}_k$ is singular, but the sum $\mathbf{B} = \sum_k \mathbf{B}_k$ is full rank because different sites have different values of teaching status.
+
+
+\subsection{Simulation 4: Sandwich Estimator Performance with Few Clusters}
+\label{s:sim4}
+
+The sandwich variance estimator is asymptotic in the number of independent clusters. This simulation varies $K$ from 5 to 100 and checks empirical coverage of 95\% Wald intervals based on the federated sandwich standard errors (Table~\ref{t:sim4} and Figure~\ref{f:sandwich}).
+
+When the SE/SD ratio falls below 1, the sandwich estimator systematically underestimates variance and coverage drops below the nominal 95\%. With 5 hospitals, coverage is only 83\%; with 30 hospitals it reaches 94\%, and with 50 or more hospitals it stabilizes near the nominal level. For the VA application with approximately 130--170 medical centers, the standard sandwich should perform well. If a subset analysis restricts to 10--15 hospitals in a particular region, bias-corrected sandwich estimators (Mancl--DeRouen or Fay--Graubard) should be employed.
+
+
+%% ============================================================
+%%  5. APPLICATION
+%% ============================================================
+\section{Application: MAUD Prescribing Across VA Medical Centers}
+\label{s:application}
+
+
+\section{Discussion}
+\label{s:discuss}
+
+This paper has developed and evaluated a federated GEE protocol for multi-site analysis of binary outcomes, motivated by the study of MAUD prescribing across VA hospitals. The approach has several attractive properties for privacy-constrained health system research.
+
+First, federation is exact: the federated estimating equations are algebraically identical to the pooled estimating equations, so no statistical information is lost relative to centralized analysis. This distinguishes federated GEE from approximate distributed methods that trade accuracy for communication efficiency. The only objects transmitted between sites and the coordinating center are low-dimensional summary matrices---$p \times p$ bread and meat matrices and a $p \times 1$ score vector---none of which can be used to reconstruct individual patient records when the number of observations per site is large.
+
+Second, the population-average estimand provided by GEE is well-matched to the policy questions motivating this work. System-level decisions about resource allocation, prescribing guidelines, and quality benchmarking require understanding how prescribing rates vary with patient characteristics across the entire VA population, not within-cluster predictions for individual patients. The simulation studies confirm that GEE consistently recovers the marginal effect under the nested copula data-generating process, while the GLMM estimates the conditional effect---a different and larger quantity whose gap with the marginal effect grows with between-hospital heterogeneity.
+
+Third, the federated protocol accommodates hospital-level covariates despite within-site rank deficiency. The simulation demonstrates that aggregating the bread matrices across sites resolves the singularity that would prevent any single site from estimating hospital-level effects, with federated and pooled estimates agreeing to machine precision.
+
+Several limitations should be noted. GEE cannot decompose the total variation in prescribing into between-hospital and within-hospital components, nor can it produce hospital-specific profiles or rankings. These questions require random effects and, in a federated setting, more complex distributed likelihood-based methods. The sandwich variance estimator requires a sufficient number of independent clusters for reliable inference; our simulations suggest that 30 or more hospitals are needed for the uncorrected sandwich, with bias-corrected variants recommended for smaller subsets. Finally, the current protocol assumes that all sites participate in every iteration of the Fisher scoring algorithm; extensions to asynchronous or communication-efficient protocols may be needed for very large networks or settings with intermittent connectivity.
+
+Two directions for future work merit emphasis. First, the independence working correlation used in our analysis may not be the most statistically efficient choice. Pan's (2001) Quasi-likelihood under the Independence model Criterion (QIC) provides a principled basis for selecting among candidate working correlation structures, and QIC decomposes naturally in the federated setting---each site can transmit its quasi-likelihood contribution and sandwich components without sharing patient data. A federated QIC protocol would enable privacy-preserving model selection for the working correlation. Second, the current protocol relies on a centralized coordinating center; fully decentralized implementations using consensus-based optimization could further reduce communication bottlenecks and single-point-of-failure risks.
+
+The approach is not limited to the VA or to AUD treatment. Any multi-site study of a binary outcome where patient-level data cannot be centralized---whether due to regulatory, institutional, or ethical constraints---faces the same analytic challenge. The federated GEE framework developed here provides a general-purpose solution that preserves the full statistical efficiency of pooled analysis while respecting the data governance boundaries that increasingly characterize health system research.
+
+
+\newpage
+
+\backmatter
+
+\bibliographystyle{biom}
+\bibliography{02_bibliography}
+
+\begin{table}
+\caption{Mean absolute bias (MAB) and 95\% CI coverage across three estimation strategies, over 200 replications. Federated and pooled GEE are numerically identical. Meta-analytic GLM coverage collapses under high hospital-level correlation.}
+\label{t:sim1}
+\begin{center}
+\begin{tabular}{cc|cc|cc|cc}
+\Hline
+ & & \multicolumn{2}{c|}{Federated GEE} & \multicolumn{2}{c|}{Pooled GEE} & \multicolumn{2}{c}{Meta-Analytic GLM} \\
+$\rho_H$ & $\rho_P$ & MAB & Coverage & MAB & Coverage & MAB & Coverage \\ \hline
+0.0 & 0.2 & 0.061 & 0.925 & 0.061 & 0.925 & 0.066 & 0.950 \\
+0.0 & 0.5 & 0.057 & 0.955 & 0.057 & 0.955 & 0.060 & 0.965 \\
+0.0 & 0.8 & 0.075 & 0.915 & 0.075 & 0.915 & 0.080 & 0.925 \\
+0.1 & 0.2 & 0.067 & 0.920 & 0.067 & 0.920 & 0.077 & 0.920 \\
+0.1 & 0.5 & 0.074 & 0.905 & 0.074 & 0.905 & 0.076 & 0.920 \\
+0.1 & 0.8 & 0.077 & 0.920 & 0.077 & 0.920 & 0.079 & 0.920 \\
+0.3 & 0.5 & 0.077 & 0.915 & 0.077 & 0.915 & 0.183 & 0.560 \\
+0.3 & 0.8 & 0.090 & 0.915 & 0.090 & 0.915 & 0.200 & 0.530 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\begin{table}
+\caption{Sandwich estimator performance by number of clusters. SE/SD ratio below 1 indicates systematic underestimation of variability. Coverage approaches nominal (95\%) with 30 or more hospitals.}
+\label{t:sim4}
+\begin{center}
+\begin{tabular}{rcccc}
+\Hline
+Hospitals & Coverage & Mean SE & Empirical SD & SE/SD Ratio \\ \hline
+5   & 0.830 & 0.152 & 0.182 & 0.839 \\
+10  & 0.905 & 0.119 & 0.129 & 0.918 \\
+15  & 0.915 & 0.100 & 0.114 & 0.873 \\
+30  & 0.940 & 0.073 & 0.075 & 0.980 \\
+50  & 0.960 & 0.057 & 0.058 & 0.997 \\
+100 & 0.955 & 0.040 & 0.040 & 0.994 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+%% ============================================================
+%%  FIGURES  (placed after tables per Biometrics style)
+%% ============================================================
+
+\begin{figure}
+\caption{Schematic of the federated GEE protocol. The coordinating center broadcasts the current parameter estimate $\hat{\boldsymbol{\beta}}$ to all sites. Each site computes fitted values locally and returns three summary matrices (Bread $\mathbf{B}_k$, Score $\mathbf{S}_k$, Meat $\mathbf{M}_k$). The center aggregates these, updates $\hat{\boldsymbol{\beta}}$, and iterates until convergence. At convergence, the sandwich variance is assembled from the aggregated bread and meat. No patient-level data leaves any site.}
+\label{f:protocol}
+\end{figure}
+
+\begin{figure}
+\caption{GEE recovers the true marginal coefficient ($\beta_x = 1$) at all levels of hospital correlation $\rho_H$, with $\rho_P = 0.5$ fixed. The GLMM estimates the conditional (subject-specific) effect, which inflates as between-hospital heterogeneity grows. Shaded bands show 2.5th--97.5th percentile ranges across 30 replications.}
+\label{f:gee-glmm}
+\end{figure}
+
+\begin{figure}
+\caption{Left: Distribution of the federated GEE teaching coefficient estimate across 30 replications (true value 0.5), demonstrating recovery despite within-site rank deficiency. Right: Federated vs.\ pooled GEE estimates are identical to floating-point precision.}
+\label{f:teaching}
+\end{figure}
+
+\begin{figure}
+\caption{Empirical coverage of 95\% Wald intervals based on the federated sandwich standard error, as a function of the number of hospitals. With few hospitals ($K < 15$), the sandwich underestimates variance and coverage drops below nominal. The dashed line marks 95\%; dotted lines mark the Monte Carlo simulation error band.}
+\label{f:sandwich}
+\end{figure}
+
+
+\label{lastpage}
+
+\end{document}
+
+
+
+
+
+
+
+\newpage
+We introduce Fed-GEE, a federated framework designed to solve global estimating equations similarly to a pooled GEE, but without the transfer of raw patient-level data. By aggregating only site-specific summary statistics, specifically Score, Bread, and Meat matrices at a central server, the framework employs an iterative Fisher Scoring to optimize the estimator until a specified convergence bound is achieved. This privacy-preserving approach ensures that the resulting sandwich estimator and robust variance components are nearly identical to those obtained by traditional pooled analysis, which can be seen as gold standard. Consequently, Fed-GEE effectively navigates data privacy barriers such as HIPAA, making large-scale, multi-center research feasible across isolated longitudinal, clinical datasets. Meanwhile, for hospital-level covariates, Fed-GEE could handle local design matrices rank deficiency problems. For example, sex is fixed for a women hospital, the federated protocal solves this by aggregating the bread matrices, which will be introduced later aross all sites before inversion. Also for small-cluster \soumik{correction}, Note that the standard sandwich variance estimator is asymptotic. Detail how bias corrections (like Mancl-DeRouen or Fay-Graubard) can be applied locally for analyses with fewer hospitals. The specific implementation steps are as follows.
+
+\noindent\textbf{Notations}
+\begin{itemize}
+\item Number of sites: $1 \leq i \leq N$
+\item Number of patients in $i-th$ site: $1 \leq j \leq N_i$
+\item Number of visits for $j-th$ patient in $i-th$ site: $1 \le k \le N_{ij}$
+\end{itemize}
+
+\noindent\textbf{Fed-GEE Algorithm}
+To modeling a multi-center longitudinal dataset that consists of N different hospitals/EHR systems, under this setting, the GEE model can be expressed as:
+\begin{equation}
+    g(\boldsymbol{\mu_{ijk}}) = \boldsymbol{x_{ijk}}^T\boldsymbol{\beta}
+\end{equation}
+where:
+
+\begin{itemize}
+    \item $g(.)$ is the link function.
+    \item Marginal mean $\boldsymbol{\mu_{ijk}}$ can be expressed as: $\boldsymbol{\mu_{ijk}}=E(\boldsymbol{Y_{ijk}})$.     
+    \item $\boldsymbol{\beta} \in \mathbf{R}^p$ denotes the global fixed effects shared across all sites.
+    \item $\boldsymbol{x_{ijk}}^T$ denotes the covariates corresponding to global fixed effect $\boldsymbol{\beta}$.
+\end{itemize}
+
+To account for correlation caused by repeated visits of patients, we identify a working correlation matrix $R_i(\rho_i)$ for each patient within each site. The marginal variance-covariance matrix for subject $j$ at site $i$ is defined as:
+\begin{equation}
+    V_{ij} = \phi A_{ij}^{1/2}R_i(\rho_i)A_{ij}^{1/2}
+\end{equation}
+where:
+\begin{itemize}
+    \item $A_{ij} = diag(Var(\boldsymbol{y_{ijk}}))$ is a diagonal matrix of the marginal variance functions.
+    \item $R_i(\rho_i)$ is the site-specific working correlation matrix.
+    \item $\phi$ is the dispersion parameter.
+\end{itemize}
+
+Parameter vector $\boldsymbol{\beta}$ can be obtained by solving the global score equation: 
+\begin{equation}
+    S_{global}(\boldsymbol{\beta})=\sum_{i=1}^{N}\sum_{j=1}^{N_i}S_{ij}(\boldsymbol{\beta})=0\
+\end{equation}
+where the score function$S_{ij}$, derivative $D_{ij}$ and residual $r_{ij}$ of a single individual $j$ at site $i$ can be defined as:
+\begin{equation}
+    S_{ij}(\boldsymbol{\beta})=D_{ij}(\boldsymbol{\beta})^TV_{ij}(\boldsymbol{\beta})^{-1}r_{ij}(\boldsymbol{\beta})
+\end{equation}
+\begin{equation}
+    r_{ij}(\boldsymbol{\beta}) = \boldsymbol{Y_{ij}} - \boldsymbol{\mu_{ij}}(\boldsymbol{\beta})
+\end{equation}
+\begin{equation}
+        D_{ij}(\boldsymbol{\beta}) = \frac{\partial \boldsymbol{\mu_{ij}}(\boldsymbol{\beta})}{\partial \boldsymbol{\beta}^T}
+\end{equation}
+
+While the goal is to solve $S_{\text{global}}(\boldsymbol{\beta}) = 0$, due to privacy constraints, the raw data $\{\boldsymbol{Y_{ijk}}, \boldsymbol{X_{ijk}}\}$ cannot leave the local sites. The Fed-GEE algorithm is designed to perform federated estimation by only aggregating summary statistics—specifically the "Bread" ($\boldsymbol{B}$), "Score" ($\boldsymbol{S}$), and "Meat" ($\boldsymbol{M}$) matrices—from local sites to a central server, where global parameters are then updated via Fisher Scoring.The workflow consists of three steps. 
+
+In Step 1, to obtain an initial value for the model parameter $\boldsymbol{\beta}$, we fit GEEs at each site locally to get $\hat{\boldsymbol{\beta}}_i$ and its variance $\hat{V}_i$. We then calculate the initial global common parameter value as:
+\begin{equation}
+\boldsymbol{\hat{\beta}}=(\sum_{i=1}^{N}\hat{V}_i^{-1})^{-1}(\sum_{i=1}^{N}\hat{V}_i^{-1}\boldsymbol{\hat{\beta}_i})
+\end{equation}
+
+In Step 2, the initial value is broadcast back to each site. Instead of collecting updated parameters from each site, we only collect the summary statistics $\boldsymbol{B}_i$, $\boldsymbol{S}_i$, and $\boldsymbol{M}_i$. This approach limits the amount of shared information during communication and decreases the risk of data leakage. 
+
+In Step 3, the summary statistics obtained from Step 2 are centralized at the server to form the global Bread ($\boldsymbol{B}_{\text{global}}$) and Score ($\boldsymbol{S}_{\text{global}}$) matrices by summing each site's matrices separately. The aggregated statistics are used to update the global parameters $\hat{\boldsymbol{\beta}}$ through the Fisher Scoring by $\boldsymbol{\beta}^{(t+1)} = \boldsymbol{\beta}^{(t)}+\left[{B^{(t)}_{global}}\right]^{-1}S^{(t)}_{global}$. Steps 2 and 3 can be executed recursively to achieve more precise parameter updates when iterative communication is supported. A detailed explanation of this algorithm is provided below in algorithm section. 
+
+\section{Theoretical Proofs}
+We will prove the consistency, asymptotic normality and convergence of Fed-GEE estimator in this section.
+\subsection{Regularity Conditions}
+Let $\Theta$ be the parameter space and $\boldsymbol{\beta}_0$ be the true parameter value. Define the normalized score function as $S_N(\boldsymbol{\beta}) = \frac{1}{N} S_{\text{global}}(\boldsymbol{\beta})$. We assume the following regularity conditions:
+
+\begin{itemize}
+    \item[(C1)] The true value $\boldsymbol{\beta}_0$ is the unique solution to $\mathbb{E}\{S_N(\boldsymbol{\beta})\} = \mathbf{0}$.
+    \item[(C2)] $\boldsymbol{\beta}$ belongs to a compact set $\Theta \subset \mathbb{R}^p$, and $\boldsymbol{\beta}_0$ is an interior point.
+    \item[(C3)] The mean function $\mu(\boldsymbol{\beta})$ is twice continuously differentiable, and the covariance matrix $V_{ij}$ is positive definite.
+    \item[(C4)] The limit: $\lim_{N\to \infty} \mathbb{E}\left[ -\frac{\partial}{\partial \boldsymbol{\beta}^T} S_N(\boldsymbol{\beta}) \right]$ exists and is non-singular.
+\end{itemize}
+
+\subsection{Proof of Consistency}
+\begin{theorem}[Consistency]
+Under conditions (C1)--(C4), as $N \to \infty$, the Fed-GEE estimator $\hat{\boldsymbol{\beta}}_{\text{Fed}}$ converges in probability to $\boldsymbol{\beta}_0$:
+\begin{equation*}
+    \hat{\boldsymbol{\beta}}_{\text{Fed}} \xrightarrow{p} \boldsymbol{\beta}_0.
+\end{equation*}
+\end{theorem}
+
+\begin{proof}
+Under the correct specification of the mean model $\mathbb{E}[Y_{ij}|X_{ij}]=\mu_{ij}(\boldsymbol{\beta}_0)$, we have:
+\begin{equation*}
+    \mathbb{E}[S_N(\boldsymbol{\beta}_0)] = \frac{1}{N}\sum_{i}\sum_{j}D_{ij}^T V_{ij}^{-1}\mathbb{E}[Y_{ij}-\mu_{ij}(\boldsymbol{\beta}_0)]=0.
+\end{equation*}
+By the Weak Law of Large Numbers (WLLN) for independent sites, for any fixed $\boldsymbol{\beta} \in \Theta$, $S_N(\boldsymbol{\beta}) \xrightarrow{p} \mathbb{E}[S_N(\boldsymbol{\beta})] = \Psi(\boldsymbol{\beta})$. To prove consistency, we show that this convergence is uniform over $\Theta$. Given (C2) and (C3), $S_N(\boldsymbol{\beta})$ and $\Psi(\boldsymbol{\beta})$ are Lipschitz continuous with constant $L < \infty$. For any $\delta > 0$, let $\{\boldsymbol{\beta}_1, \dots, \boldsymbol{\beta}_M\}$ be grid points covering $\Theta$. For any $\boldsymbol{\beta} \in \Theta$, let $\boldsymbol{\beta}_k$ be the nearest grid point such that $\|\boldsymbol{\beta} - \boldsymbol{\beta}_k\| < \delta$. By the triangle inequality:
+\begin{align*}
+\|S_N(\boldsymbol{\beta}) - \Psi(\boldsymbol{\beta})\| &\le \underbrace{\|S_N(\boldsymbol{\beta}) - S_N(\boldsymbol{\beta}_k)\|}_{\text{Part A}} + \underbrace{\|S_N(\boldsymbol{\beta}_k) - \Psi(\boldsymbol{\beta}_k)\|}_{\text{Part B}} + \underbrace{\|\Psi(\boldsymbol{\beta}_k) - \Psi(\boldsymbol{\beta})\|}_{\text{Part C}} \\
+&\le L\|\boldsymbol{\beta} - \boldsymbol{\beta}_k\| + \|S_N(\boldsymbol{\beta}_k) - \Psi(\boldsymbol{\beta}_k)\| + L\|\boldsymbol{\beta} - \boldsymbol{\beta}_k\| \\
+&\le 2L\delta + \|S_N(\boldsymbol{\beta}_k) - \Psi(\boldsymbol{\beta}_k)\|.
+\end{align*}
+Taking the supremum over $\Theta$, we have $\sup_{\boldsymbol{\beta} \in \Theta} \|S_N(\boldsymbol{\beta}) - \Psi(\boldsymbol{\beta})\| \le 2L\delta + \max_{k} \|S_N(\boldsymbol{\beta}_k) - \Psi(\boldsymbol{\beta}_k)\|$. The second term converges to zero in probability by the WLLN. Since $\delta$ is arbitrary, $\sup_{\boldsymbol{\beta} \in \Theta} \|S_N(\boldsymbol{\beta}) - \Psi(\boldsymbol{\beta})\| \xrightarrow{p} 0$. Under (C1), $\Psi(\boldsymbol{\beta}) = 0$ only at $\boldsymbol{\beta} = \boldsymbol{\beta}_0$. Since $S_N(\hat{\boldsymbol{\beta}}_{\text{Fed}}) = 0$, it follows that $\hat{\boldsymbol{\beta}}_{\text{Fed}} \xrightarrow{p} \boldsymbol{\beta}_0$.
+\end{proof}
+
+\subsection{Asymptotic Normality of Fed-GEE Estimator}
+
+Let $K$ denote the total number of clusters. Define the global estimating equation $S(\boldsymbol{\beta}) = \sum_{i=1}^{K}\sum_{j=1}^{n_i} D_{ij}^\top V_{ij}^{-1}(y_{ij}-\mu_{ij}(\boldsymbol{\beta}))=0$. Let $\boldsymbol{\beta}_0$ be the true parameter, $\hat{\boldsymbol{\beta}}_{\text{Pooled}}$ be the pooled GEE estimator such that $S(\hat{\boldsymbol{\beta}}_{\text{Pooled}})=0$, and $\hat{\boldsymbol{\beta}}_{\text{Fed}}$ be the Fed-GEE estimator.
+
+\begin{theorem}[Asymptotic Normality]
+Under regularity conditions (C1)--(C4), and assuming the initial estimator satisfies $\|\hat{\boldsymbol{\beta}}^{(0)} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| = O_p(K^{-\delta})$ for some $\delta > 0$, we have:
+\begin{equation*}
+    \sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Fed}} - \boldsymbol{\beta}_0) \xrightarrow{d} \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma}),
+\end{equation*}
+where $\boldsymbol{\Sigma} = \mathbf{H}^{-1} \mathbf{V} \mathbf{H}^{-1}$, $\mathbf{H} = \lim_{K \to \infty} \frac{1}{K} \mathbb{E}[\nabla S(\boldsymbol{\beta}_0)]$, and $\mathbf{V} = \lim_{K \to \infty} \frac{1}{K} \text{Var}\{S(\boldsymbol{\beta}_0)\}$.
+\end{theorem}
+
+\begin{proof}
+We decompose the difference into numerical and statistical components:
+\begin{equation*}
+\sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Fed}} - \boldsymbol{\beta}_0) = \sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Fed}} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}) + \sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0).
+\end{equation*}
+
+\paragraph{Part 1: Normality of the Pooled Estimator.}
+By a first-order Taylor expansion of $S(\hat{\boldsymbol{\beta}}_{\text{Pooled}})$ around $\boldsymbol{\beta}_0$:
+\begin{equation*}
+    \mathbf{0} = S(\boldsymbol{\beta}_0) + \nabla S(\boldsymbol{\beta}_0) (\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0) + o_p(\|\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0\|).
+\end{equation*}
+Rearranging yields $\sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0) = - [ \frac{1}{K} \nabla S(\boldsymbol{\beta}_0) ]^{-1} [ \frac{1}{\sqrt{K}} S(\boldsymbol{\beta}_0) ]$. By the WLLN and CLT, $\sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0) \xrightarrow{d} \mathcal{N}(\mathbf{0}, \boldsymbol{\Sigma})$.
+
+\paragraph{Part 2: Numerical Equivalence.}
+The Fed-GEE update is $\hat{\boldsymbol{\beta}}^{(t+1)} = f(\hat{\boldsymbol{\beta}}^{(t)})$, where $f(\boldsymbol{\beta}) = \boldsymbol{\beta} + \mathbf{B}(\boldsymbol{\beta})^{-1} S(\boldsymbol{\beta})$. Evaluating the Jacobian $\nabla f$ at $\hat{\boldsymbol{\beta}}_{\text{Pooled}}$ gives $\nabla f(\hat{\boldsymbol{\beta}}_{\text{Pooled}}) = \mathbf{I} + \mathbf{0} - \mathbf{I} = \mathbf{0}$, implying quadratic convergence:
+\begin{equation*}
+    \|\hat{\boldsymbol{\beta}}^{(t+1)} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| \le C \|\hat{\boldsymbol{\beta}}^{(t)} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\|^2.
+\end{equation*}
+Given $\|\hat{\boldsymbol{\beta}}^{(0)} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| = O_p(K^{-\delta})$, after $t$ iterations $\|\hat{\boldsymbol{\beta}}_{\text{Fed}} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| = o_p(K^{-1/2})$. Thus, $\sqrt{K}(\hat{\boldsymbol{\beta}}_{\text{Fed}} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}) \xrightarrow{p} 0$, and the result follows.
+\end{proof}
+
+\subsection{Proof of Convergence}
+\begin{proof}As established in Theorem 2, under the requirement that the initial estimator satisfies $\|\hat{\boldsymbol{\beta}}^{(0)} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| = O_p(K^{-\delta})$, the numerical error after $t$ iterations is $\|\hat{\boldsymbol{\beta}}_{\text{Fed}} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\| = o_p(K^{-1/2})$. Then by the triangle inequality, we decompose the total error of the federated estimator as:
+\begin{align*}
+\|\hat{\boldsymbol{\beta}}_{\text{Fed}} - \boldsymbol{\beta}_0\|\ &\le \|\hat{\boldsymbol{\beta}}_{\text{Fed}} - \hat{\boldsymbol{\beta}}_{\text{Pooled}}\|\ + \|\hat{\boldsymbol{\beta}}_{\text{Pooled}} - \boldsymbol{\beta}_0\|\ = o_p(K^{-1/2}) + O_p(K^{-1/2}) = O_p(K^{-1/2}).\end{align*}Since $O_p(K^{-1/2}) \xrightarrow{p} 0$ as the total number of patients $K \to \infty$, it follows that the distance between the Fed-GEE estimator and the true parameter value converges to zero in probability. Thus, $\hat{\boldsymbol{\beta}}_{\text{Fed}}$ is a consistent estimator for $\boldsymbol{\beta}_0$. Moreover, this decomposition implies that the numerical error is asymptotically negligible compared to the statistical error. Consequently, $\hat{\boldsymbol{\beta}}_{\text{Fed}}$ achieves the same $\sqrt{K}$ rate of convergence as the centralized pooled estimator.
+\end{proof}
+
+\appendix
+
+
+
+
+\section{Simulation Studies}
+\label{s:simulations}
+We conduct a simulation study to evaluate the performance and robustness of Fed-GEE under different data generation scenarios. This can fill the gap that in real world cases, we don't know latent true regression coefficients and underlying correlation structures. For data generation, we consider a binary outcome with a logit link function, a binary exposure (following a Bernoulli distribution), and two additional covariates (continuous variables following standard normal and uniform distributions, respectively). The model is defined as:
+\begin{equation}
+        g(\mathbb{E}(Y_{ijk}|X_{ijk}))=1 + x_{1ijk}+0.5*x_{2ijk}+0.5*x_{3ijk}
+\end{equation}
+where:
+\begin{itemize}
+    \item $x_{1ijk} \sim Bernolli (p_x), x_{2ijk} \sim Uniform(0,1), x_{3ijk} \sim N(0,1)$
+    
+\end{itemize}
+To capture the correlation between nested patients/visits, we define a latent variable. The latent variable $Z_{ijk}$ for patient $j$ at hospital $i$, visit $k$ can be defined as:
+\begin{equation}
+    Z_{ijk} = \sqrt{\rho_I}\; U_i + \sqrt{\rho_J - \rho_I}\; W_{ij} + \sqrt{1 - \rho_J}\; \epsilon_{ijk}
+\label{eq:copula}
+\end{equation}
+where:
+\begin{itemize}
+    \item $U_i \sim N(0,1)$ is shared across hospital $i$, $W_{ij} \sim N(0,1)$ is shared across patient's $j$'s visits, $\epsilon_{ijk} \sim N(0,1)$ is visit-level noise, all items are independent.
+    \item $Z_{ijk} \sim N(0,1)$ since the variance sums to 1. Setting $Y_{ijk}=\mathbf{1}(Z_{ijk}<\Phi^{-1}(p_{ijk}))$ where $p_{ijk}=logit^{-1}(X_{ijk}^T\boldsymbol{\beta})$ guarantees that $P(Y_{ijk}=1)=p_{ijk}$ exactly.
+    \item The correlation structure for same patient, different visits is: $Cor(Z_{ijk},Z_{ijk'})=\rho_J$. For same hospital, different patients is: $Cor(Z_{ijk},Z_{ij'k'})=\rho_I$. Different hospitals are independent.
+     \item The constraint $1 \geq \rho_J \geq \rho_I \geq 0$ must hold.
+\end{itemize}
+
+
+\subsection{Simulation 1: Federated GEE vs.\ Pooled GEE vs.\ Meta-Analytic GEE}
+\label{s:sim1}
+
+To validate the accuracy of the Fed-GEE algorithm, we demonstrate that with reasonable initial values and limited iterations, the relative bias of Fed-GEE is nearly identical to that of Pooled GEE, which can be seen as the centralized "gold standard." We also compare our method against Meta-Analytic GEE, which fits a GEE model at each site and combines site-level estimates via inverse-variance weighted meta-analysis, representing the simplest decentralized approach.
+
+We run 200 replications for each combination of hospital-level correlation $\rho_H \in \{0, 0.1, 0.3\}$ and patient-level correlation $\rho_P \in \{0.2, 0.5, 0.8\}$, subject to the constraint $\rho_P > \rho_H$. For each setting, we report the mean absolute bias relative to the true coefficient $\beta_x = 1$, the empirical coverage of nominal 95\% confidence intervals, the total computing time, and the number of Fed-GEE iteration rounds (Table~\ref{t:sim1}).
+
+\subsection{Simulation 2: Federated GEE vs Federated GLMM}
+\label{s:sim2}
+
+\subsection{Simulation 3: Hospital covariates}
+\label{s:sim3}
+
+\subsection{Simulation 4: Sandwich Estimator Performance with fewer clusters}
+\label{s:sim4}
+
+
+
+
+
+
+
+
+
+\section{Application}
+\label{a:app}
+
+
+\section{Discussion}
+\label{d:discussion}
+
+
+
+
+The increasing maturity of Electronic Health Record (EHR) system construction has facilitated multi-center collaborative research. However, stringent privacy constraints often limit the scope of such studies by prohibiting the exchange of raw patient-level data across systems. To address this, we propose the Fed-GEE algorithm, which has proven to be mathematically exact compared to pooled data analysis especially GEE. By ensuring data privacy while maintaining statistical exactness, this approach enables multi-center studies designed to address population-average questions and inform policy-level decisions.
+
+We acknowledge that GEE itself is limited by its inability to produce hospital-specific rankings or decompose total variation into between- and within-hospital components. Furthermore, achieving exactness with Fed-GEE requires sufficient cluster sizes and multiple communication rounds across sites.
+
+To enhance the model's utility, in the future, we plan to incorporate Fed-QIC, a decentralized criterion analogous to traditional QIC to identify the most appropriate correlation structure. And we plan to work with a fully decentralized framework, which circumvents the need for a trusted central server and ensures privacy even in the absence of a central coordinator.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

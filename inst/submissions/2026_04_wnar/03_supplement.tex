@@ -1,0 +1,221 @@
+%  FedGEE manuscript for WNAR Student Paper Competition
+%  Using Biometrics template
+%
+\PassOptionsToPackage{pdftex}{graphicx}
+\documentclass[useAMS,referee, usegraphicx]{biom}
+
+\usepackage{placeins} % Allows us to build an invisible wall that floats cannot cross
+\usepackage{float}    % Gives us the [H] command to absolutely freeze a table in place
+
+%%%%% MACROS %%%%%
+\usepackage{amsmath, amssymb, mathtools, natbib}
+\newcommand{\tr}{\mbox{tr}}
+\DeclareMathOperator{\logit}{logit}
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{todonotes}
+\usepackage{ulem}
+\usepackage{graphicx, booktabs}
+\usepackage{multicol, multirow}
+\usepackage[table,xcdraw]{xcolor}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title[Fed-GEE: Federated GEE for Privacy-Preserving Inference]{Supplementary material for Fed-GEE: Federated Generalized Estimating Equations for Privacy-Preserving Population-Level Inference for Multicenter Longitudinal Data}
+
+\newcommand{\soumik}[1]{\textcolor{blue}{#1}}
+\newcommand{\feier}[1]{\textcolor{red}{#1}}
+
+
+\begin{document}
+\date{}
+
+\pagerange{\pageref{firstpage}--\pageref{lastpage}}
+\volume{00}
+\pubyear{2026}
+\artmonth{March}
+\doi{00.0000/j.0000-0000.0000.00000.x}
+
+\label{firstpage}
+
+% \begin{abstract}
+% The widespread adoption of Electronic Health Record (EHR) systems has enabled large-scale multicenter studies. However, data privacy protection restricts the sharing of patient-level data, creating barriers to pooled analysis. Federated learning (FL) provides a solution by enabling model estimation through the exchange of summary statistics rather than raw data. Standard FL methods require independent and identically distributed data, which is unrealistic in EHR systems that capture longitudinal data. We propose a FL framework using Generalized Estimating Equations (Fed-GEE) for EHR data that enables privacy-preserving inference for longitudinal EHR data. Extensive simulation studies comparing FedGEE with competing FL models reveal improvements in terms of reduced bias, improved coverage probability, and reduced runtimes. We investigate key asymptotic properties of FedGEE, providing a theoretical basis for valid population-level inference. We demonstrate the performance of FedGEE in numerical experiments and implement an application to longitudinal EHR data from the Veterans Health Administration, the largest integrated EHR system in the United States.  
+% \soumik{try and re-write this abstract, note we are not comparing with GLMM; but in terms of output, we now have site-level covariates and we have the small sample correction. }
+% \vspace{1cm}
+% \end{abstract}
+
+
+
+% \begin{keywords} Clustered data; Federated learning; Generalized estimating equations; Population-average inference; Privacy-preserving analysis; Sandwich variance estimator.
+% \end{keywords}
+
+\maketitle
+
+\section{Supplement A: Algorithm for inference and estimation for Fed-GEE}\label{app:algo}
+\begin{algorithm}
+\footnotesize
+\label{alg:fedgee}
+\begin{algorithmic}[1]
+\REQUIRE 
+    Distributed datasets $\{\mathbf{X}_i, \mathbf{Y}_i\}_{i=1}^K$ across $K$ sites; 
+    Initial parameter vector $\boldsymbol{\beta}^{(0)}$ (with site-level covariates initialized to 0); 
+    Working correlation parameter $\alpha$; 
+    Convergence tolerance $\epsilon$; 
+    Maximum iterations $M$.
+\ENSURE 
+    Estimated marginal parameters $\hat{\boldsymbol{\beta}}$; 
+    KC-corrected robust sandwich variance $\mathbf{V}_{\beta}^{KC}$.
+
+\STATE \textbf{Phase 1: Federated Fisher Scoring: Iterative optimization}
+\FOR{$m = 0, 1, \dots, M-1$}
+    \STATE Server broadcasts global parameters $\boldsymbol{\beta}^{(m)}$ to all $K$ sites.
+    \FOR{\textbf{each site} $i \in \{1, \dots, K\}$ \textbf{in parallel}}
+        \STATE \textit{// Execute locally without exposing patient data}
+        \STATE Compute local Score vector: $\mathbf{S}_i\left(\boldsymbol{\beta}^{(m)}\right) = \sum_{j=1}^{n_i} \mathbf{D}_{ij}^T \mathbf{V}_{ij}^{-1} \left(\mathbf{Y}_{ij} - \boldsymbol{\mu}_{ij}\right)$
+        \STATE Compute local Bread matrix: $\mathbf{B}_i\left(\boldsymbol{\beta}^{(m)}\right) = \sum_{j=1}^{n_i} \mathbf{D}_{ij}^T \mathbf{V}_{ij}^{-1} \mathbf{D}_{ij}$
+        \STATE Transmit $\{\mathbf{S}_i, \mathbf{B}_i\}$ to the central server.
+    \ENDFOR
+    
+    \STATE \textbf{Server Execution:}
+    \STATE Aggregate global matrices: $\mathbf{S}_{global} = \sum_{i=1}^K \mathbf{S}_i$ and $\mathbf{B}_{global} = \sum_{i=1}^K \mathbf{B}_i$
+    \STATE Update parameters: $\boldsymbol{\beta}^{(m+1)} = \boldsymbol{\beta}^{(m)} + \mathbf{B}_{global}^{-1} \mathbf{S}_{global}$
+    \IF{$\left|\left|\boldsymbol{\beta}^{(m+1)} - \boldsymbol{\beta}^{(m)}\right|\right| < \epsilon$}
+        \STATE Set $\hat{\boldsymbol{\beta}} \leftarrow \boldsymbol{\beta}^{(m+1)}$ and \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\STATE \textbf{Phase 2: Kauermann-Carroll Small-Sample Variance Estimation}
+\STATE Server broadcasts final parameters $\hat{\boldsymbol{\beta}}$ and final global Bread $\mathbf{B}_{global}$ to all $K$ sites.
+
+\FOR{\textbf{each site} $i \in \{1, \dots, K\}$ \textbf{in parallel}}
+    \STATE Compute final local Score evaluated at convergence: $\mathbf{S}_i\left(\hat{\boldsymbol{\beta}}\right)$
+    \STATE Compute local Bread evaluated at convergence: $\mathbf{B}_i\left(\hat{\boldsymbol{\beta}}\right)$
+    \STATE Calculate local site leverage: $\mathbf{H}_{ii} = \mathbf{B}_i \mathbf{B}_{global}^{-1}$
+    \STATE Apply leverage to adjust score: $\widetilde{\mathbf{S}}_i = \left(\mathbf{I} - \mathbf{H}_{ii}\right)^{-1/2} \mathbf{S}_i\left(\hat{\boldsymbol{\beta}}\right)$
+    \STATE Construct bias-corrected local Meat matrix: $\mathbf{M}_i^{KC} = \widetilde{\mathbf{S}}_i \widetilde{\mathbf{S}}_i^T$
+    \STATE Transmit $\mathbf{M}_i^{KC}$ to the central server.
+\ENDFOR
+
+\STATE \textbf{Server Execution:}
+\STATE Aggregate global corrected Meat matrix: $\mathbf{M}_{global}^{KC} = \sum_{i=1}^K \mathbf{M}_i^{KC}$
+\STATE Construct final robust variance: $\mathbf{V}_{\beta}^{KC} = \mathbf{B}_{global}^{-1} \mathbf{M}_{global}^{KC} \mathbf{B}_{global}^{-1}$
+
+\RETURN $\hat{\boldsymbol{\beta}}$ and $\mathbf{V}_{\beta}^{KC}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Supplement B: Proof of Theorem 1} \label{a:proof_t1}
+
+\begin{proof}
+Let $\mathbf{S}_{cen}(\boldsymbol{\beta})$ and $\mathbf{B}_{cen}(\boldsymbol{\beta})$ represent the score vector and information (bread) matrix for the centralized dataset. By the additive property of matrix operations over independent subjects across sites, we can decompose the centralized matrices:
+\begin{equation}
+    \mathbf{S}_{cen}(\boldsymbol{\beta}) = \sum_{i=1}^K \sum_{j=1}^{n_i} \mathbf{D}_{ij}^T \mathbf{V}_{ij}^{-1} (\mathbf{Y}_{ij} - \boldsymbol{\mu}_{ij}) = \sum_{i=1}^K \mathbf{S}_i(\boldsymbol{\beta}) = \mathbf{S}_{global}(\boldsymbol{\beta})
+\end{equation}
+\begin{equation}
+    \mathbf{B}_{cen}(\boldsymbol{\beta}) = \sum_{i=1}^K \sum_{j=1}^{n_i} \mathbf{D}_{ij}^T \mathbf{V}_{ij}^{-1} \mathbf{D}_{ij} = \sum_{i=1}^K \mathbf{B}_i(\boldsymbol{\beta}) = \mathbf{B}_{global}(\boldsymbol{\beta})
+\end{equation}
+At any iteration $m$, assuming $\boldsymbol{\beta}^{(m)}_{fed} = \boldsymbol{\beta}^{(m)}_{cen}$, the centralized Newton-Raphson update is $\boldsymbol{\beta}^{(m+1)}_{cen} = \boldsymbol{\beta}^{(m)}_{cen} + \mathbf{B}_{cen}^{-1} \mathbf{S}_{cen}$. Substituting the sums yields exactly the Fed-GEE server update rule defined in Equation 1. By induction, the iterative sequences are identical, yielding $\hat{\boldsymbol{\beta}}_{fed} = \hat{\boldsymbol{\beta}}_{cen}$.
+\end{proof}
+
+
+\section{Supplement C: Proof of Theorem 2}
+\begin{proof}
+By Theorem  1, $\hat{\boldsymbol{\beta}}_{fed}$ is the root of the global score function such that $\mathbf{S}_{global}(\hat{\boldsymbol{\beta}}_{fed}) = \mathbf{0}$. We take a first-order Taylor series expansion of $\mathbf{S}_{global}(\hat{\boldsymbol{\beta}}_{fed})$ around the true $\boldsymbol{\beta}_0$:
+\begin{equation}
+    \mathbf{0} = \mathbf{S}_{global}\left(\boldsymbol{\beta}_0\right) + \left[ \frac{\partial \mathbf{S}_{global}\left(\boldsymbol{\beta}^*\right)}{\partial \boldsymbol{\beta}^T} \right] \left(\hat{\boldsymbol{\beta}}_{fed} - \boldsymbol{\beta}_0\right)
+\end{equation}
+where $\boldsymbol{\beta}^*$ lies on the line segment between $\hat{\boldsymbol{\beta}}_{fed}$ and $\boldsymbol{\beta}_0$. Note that for generalized estimating equations, the negative derivative of the score function is approximated by the bread matrix, $-\frac{\partial \mathbf{S}_{global}(\boldsymbol{\beta})}{\partial \boldsymbol{\beta}^T} \approx \mathbf{B}_{global}(\boldsymbol{\beta})$. Rearranging the terms and multiplying by $\sqrt{K} / K$, we obtain:
+\begin{equation}
+    \sqrt{K}\left(\hat{\boldsymbol{\beta}}_{fed} - \boldsymbol{\beta}_0\right) = \left( \frac{1}{K} \mathbf{B}_{global}(\boldsymbol{\beta}^*) \right)^{-1} \left( \frac{1}{\sqrt{K}} \mathbf{S}_{global}(\boldsymbol{\beta}_0) \right)
+\end{equation}
+
+We analyze the two components on the right-hand side separately. First, because the marginal mean is correctly specified (assumption 1), we have $E[\mathbf{S}_i(\boldsymbol{\beta}_0)] = \mathbf{0}$. Furthermore, bounded cluster sizes (assumption 2) and bounded covariates (assumption 3) ensure that the variance of each independent site-level score vector, is strictly finite. The global score evaluated at $\boldsymbol{\beta}_0$ is a sum of $K$ independent, zero-mean random vectors. By the multivariate central limit theorem, we have:
+\begin{equation}
+    \frac{1}{\sqrt{K}} \mathbf{S}_{global}(\boldsymbol{\beta}_0) = \frac{1}{\sqrt{K}} \sum_{i=1}^K \mathbf{S}_i(\boldsymbol{\beta}_0) \xrightarrow{d} \mathcal{N}(\mathbf{0}, \mathcal{M}(\boldsymbol{\beta}_0))
+\end{equation}
+Second, the application of the weak law of large numbers requires the expected value of the local bread matrices to be bounded. Because the local bread matrix is a function of the covariates and is summed over the cluster size $K$ assumption 2 and 3  guarantee that the elements remain finite. Consequently, under assumption 4, the weak law of large numbers implies that $\frac{1}{K} \mathbf{B}_{global}(\boldsymbol{\beta}^*) \xrightarrow{p} \mathcal{B}(\boldsymbol{\beta}_0)$. Since $\mathcal{B}(\boldsymbol{\beta}_0)$ is invertible, by the continuous mapping theorem, the inverse converges in probability to $\mathcal{B}^{-1}(\boldsymbol{\beta}_0)$. Combining these results using Slutsky's theorem, we establish asymptotic normality:
+\begin{equation}
+    \sqrt{K}(\hat{\boldsymbol{\beta}}_{fed} - \boldsymbol{\beta}_0) \xrightarrow{d} \mathcal{B}^{-1}(\boldsymbol{\beta}_0) \cdot \mathcal{N}(\mathbf{0}, \mathcal{M}(\boldsymbol{\beta}_0)) \equiv \mathcal{N}\left(\mathbf{0}, \mathcal{B}^{-1} \mathcal{M} \mathcal{B}^{-1}\right)
+\end{equation}
+Consistency (i.e., $\hat{\boldsymbol{\beta}}_{fed} \xrightarrow{p} \boldsymbol{\beta}_0$) follows immediately from this asymptotic normality. 
+
+Finally, for the Kauermann-Carroll adjusted meat matrix $\mathbf{M}_{global}^{KC}$, observe that the local leverage matrices are defined as $\mathbf{H}_{ii} = \mathbf{B}_i \left(\sum_i \mathbf{B}_i\right)^{-1}$. As $K \to \infty$, the global information matrix grows unboundedly, pushing the leverage terms $\mathbf{H}_{ii} \to \mathbf{0}$. Consequently, the adjustment term $(\mathbf{I} - \mathbf{H}_{ii})^{-1/2} \to \mathbf{I}$, demonstrating that the KC correction vanishes asymptotically, yielding the standard consistent sandwich estimator while providing necessary Type I error control in finite-sample distributed settings.
+\end{proof}
+
+\begin{remark}[Score-Level Leverage Correction]
+\label{rem:score_md}
+We note that the classical Kauermann-Carroll correction operates on the observation-level residuals via the $N_i \times N_i$ hat matrix $\mathbf{H}_i = \mathbf{D}_i \mathbf{B}^{-1} \mathbf{D}_i^T \mathbf{V}_i^{-1}$. In our federated setting, transmitting observation-level adjusted residuals would compromise the privacy guarantees of the protocol. We therefore apply an analogous correction in the score space, replacing the observation-level leverage with the $p \times p$ score-level leverage $\mathbf{H}_{ii}^{(s)} = \mathbf{B}_i \mathbf{B}^{-1}$.
+\end{remark}
+
+\begin{table}[H]
+\footnotesize
+\caption{Baseline characteristics of Veterans with Alcohol Use Disorder (N=29,041) stratified by MAUD initiation following inpatient discharge across 118 VHA facilities.}
+\label{tab:baseline}
+\begin{tabular}{clccc}
+\toprule
+& \multicolumn{3}{r}{{ \textbf{\begin{tabular}[c]{@{}c@{}}MAUD initiation following inpatient\\ discharge\end{tabular}}}}          \\
+\midrule
+\multicolumn{2}{c}{\multirow{-2}{*}{}}                                                                                             & { \textit{No}}     & { \textit{Yes}}   & { Total}            \\
+\midrule
+\multicolumn{2}{r}{\textit{N (\%)}}                                                                                                & { 20,109 (69.2\%)} & { 8,932 (30.8\%)} & { 29,041 (100.0\%)} \\
+\midrule
+                                                    & { \textbf{Age Category}}                   &                                                      &                                                     &                                                       \\
+                                                    & { 18-39}                                   & { 3,920 (19.5\%)}  & { 2,154 (24.1\%)} & { 6,074 (20.9\%)}   \\
+                                                    & { 40-64}                                   & { 11,411 (56.7\%)} & { 5,193 (58.1\%)} & { 16,604 (57.2\%)}  \\
+                                                    & { 65+}                                     & { 4,778 (23.8\%)}  & { 1,585 (17.7\%)} & { 6,363 (21.9\%)}   \\
+                                                    & { \textbf{Sex}}                            &                                                      &                                                     &                                                       \\
+                                                    & { Male}                                    & { 19,083 (94.9\%)} & { 8,323 (93.2\%)} & { 27,406 (94.4\%)}  \\
+                                                    & { Female}                                  & { 1,026 (5.1\%)}   & { 609 (6.8\%)}    & { 1,635 (5.6\%)}    \\
+                                                    & { \textbf{Race and Ethnicity}}             &                                                      &                                                     &                                                       \\
+                                                    & { Black or African American}               & { 3,477 (17.3\%)}  & { 1,486 (16.6\%)} & { 4,963 (17.1\%)}   \\
+                                                    & { Hispanic}                                & { 1,411 (7.0\%)}   & { 627 (7.0\%)}    & { 2,038 (7.0\%)}    \\
+                                                    & { Missing/Other}                           & { 1,364 (6.8\%)}   & { 684 (7.7\%)}    & { 2,048 (7.1\%)}    \\
+                                                    & { White}                                   & { 13,150 (65.4\%)} & { 5,865 (65.7\%)} & { 19,015 (65.5\%)}  \\
+                                                    & { \textbf{Rurality}}                       &                                                      &                                                     &                                                       \\
+                                                    & { Missing}                                 & { 162 (0.8\%)}     & { 59 (0.7\%)}     & { 221 (0.8\%)}      \\
+                                                    & { Urban}                                   & { 10,998 (54.7\%)} & { 4,733 (53.0\%)} & { 15,731 (54.2\%)}  \\
+                                                    & { Rural}                                   & { 8,949 (44.5\%)}  & { 4,140 (46.4\%)} & { 13,089 (45.1\%)}  \\
+                                                    & { \textbf{Area Deprivation Index}}         &                                                      &                                                     &                                                       \\
+                                                    & { Missing}                                 & { 1,071 (5.3\%)}   & { 391 (4.4\%)}    & { 1,462 (5.0\%)}    \\
+                                                    & { 1-25}                                    & { 2,762 (13.7\%)}  & { 1,283 (14.4\%)} & { 4,045 (13.9\%)}   \\
+                                                    & { 26-50}                                   & { 5,112 (25.4\%)}  & { 2,505 (28.0\%)} & { 7,617 (26.2\%)}   \\
+                                                    & { 51-75}                                   & { 5,769 (28.7\%)}  & { 2,634 (29.5\%)} & { 8,403 (28.9\%)}   \\
+\multirow{-22}{*}{\textbf{Demographics}}            & { 76-100}                                  & { 5,395 (26.8\%)}  & { 2,119 (23.7\%)} & { 7,514 (25.9\%)}   \\ \midrule
+                                                    & { \textbf{Any Prior-Year MAUD Use}}     &                                                      &                                                     &                                                       \\
+                                                    & { No}                                      & { 15,371 (76.4\%)} & { 6,189 (69.3\%)} & { 21,560 (74.2\%)}  \\
+                                                    & { Yes}                                     & { 4,738 (23.6\%)}  & { 2,743 (30.7\%)} & { 7,481 (25.8\%)}   \\
+                                                    & { \textbf{OUD Diagnosis}}                  &                                                      &                                                     &                                                       \\
+                                                    & { No}                                      & { 16,590 (82.5\%)} & { 7,901 (88.5\%)} & { 24,491 (84.3\%)}  \\
+                                                    & { Yes}                                     & { 3,519 (17.5\%)}  & { 1,031 (11.5\%)} & { 4,550 (15.7\%)}   \\
+                                                    & { \textbf{AUDIT-C Category}} &                                                      &                                                     &                                                       \\
+                                                    & { No Use}                                  & { 2,099 (10.4\%)}  & { 894 (10.0\%)}   & { 2,993 (10.3\%)}   \\
+                                                    & { Low use}                                 & { 2,203 (11.0\%)}  & { 871 (9.8\%)}    & { 3,074 (10.6\%)}   \\
+                                                    & { Unhealthy Use}                           & { 2,633 (13.1\%)}  & { 1,169 (13.1\%)} & { 3,802 (13.1\%)}   \\
+                                                    & { High Risk Use}                           & { 1,612 (8.0\%)}   & { 697 (7.8\%)}    & { 2,309 (8.0\%)}    \\
+                                                    & { Very High Risk Use}                      & { 8,238 (41.0\%)}  & { 3,277 (36.7\%)} & { 11,515 (39.7\%)}  \\
+\multirow{-13}{*}{\textbf{Substance Use History}}   & { Missing}                                 & { 3,324 (16.5\%)}  & { 2,024 (22.7\%)} & { 5,348 (18.4\%)}   \\ \midrule
+                                                    & { \textbf{VA CAN Score}}                   &                                                      &                                                     &                                                       \\
+                                                    & { Missing}                                 & { 1,573 (7.8\%)}   & { 962 (10.8\%)}   & { 2,535 (8.7\%)}    \\
+                                                    & { 0-19}                                    & { 1,050 (5.2\%)}   & { 734 (8.2\%)}    & { 1,784 (6.1\%)}    \\
+                                                    & { 20-39}                                   & { 3,187 (15.8\%)}  & { 1,940 (21.7\%)} & { 5,127 (17.7\%)}   \\
+                                                    & { 40-59}                                   & { 4,121 (20.5\%)}  & { 1,889 (21.1\%)} & { 6,010 (20.7\%)}   \\
+                                                    & { 60-79}                                   & { 4,549 (22.6\%)}  & { 1,699 (19.0\%)} & { 6,248 (21.5\%)}   \\
+                                                    & { 80-99}                                   & { 5,629 (28.0\%)}  & { 1,708 (19.1\%)} & { 7,337 (25.3\%)}   \\
+                                                    & { \textbf{Frailty Category}}               &                                                      &                                                     &                                                       \\
+                                                    & { Not/Pre Frail}                           & { 11,052 (55.0\%)} & { 6,086 (68.1\%)} & { 17,138 (59.0\%)}  \\
+                                                    & { Mild/Moderate Frail}                     & { 6,704 (33.3\%)}  & { 2,290 (25.6\%)} & { 8,994 (31.0\%)}   \\
+\multirow{-11}{*}{\textbf{Medical Complexity}}      & { Severely Frail}                          & { 2,353 (11.7\%)}  & { 556 (6.2\%)}    & { 2,909 (10.0\%)}   \\ \midrule
+                                                    & { \textbf{Discharging Speciality}}         &                                                      &                                                     &                                                       \\
+                                                    & { Psychiatry}                              & { 7,154 (35.6\%)}  & { 4,345 (48.6\%)} & { 11,499 (39.6\%)}  \\
+                                                    & { Medicine}                                & { 11,993 (59.6\%)} & { 4,247 (47.5\%)} & { 16,240 (55.9\%)}  \\
+                                                    & { \textbf{Discharge Disposition}}          &                                                      &                                                     &                                                       \\
+                                                    & { Routine}                                 & { 17,409 (86.6\%)} & { 8,475 (94.9\%)} & { 25,884 (89.1\%)}  \\
+                                                    & { Domicillary}                             & { 52 (0.3\%)}      & { 30 (0.3\%)}     & { 82 (0.3\%)}       \\
+                                                    & { \textbf{Addiction Consult}}              &                                                      &                                                     &                                                       \\
+                                                    & { None}                                    & { 16,851 (83.8\%)} & { 7,002 (78.4\%)} & { 23,853 (82.1\%)}  \\
+                                                    & { Non-clinical Consult}                    & { 2,761 (13.7\%)}  & { 1,593 (17.8\%)} & { 4,354 (15.0\%)}   \\
+\multirow{-10}{*}{\textbf{Hospitalization Factors}} & { Clinical Consult}                        & { 497 (2.5\%)}     & { 337 (3.8\%)}    & { 834 (2.9\%)}     \\ \bottomrule
+\end{tabular}
+\end{table}
+\end{document}

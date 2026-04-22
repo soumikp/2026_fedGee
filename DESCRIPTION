@@ -1,0 +1,21 @@
+Package: FedGEE
+Type: Package
+Title: Federated Generalized Estimating Equations
+Version: 0.1.0
+Author: Soumik Purkayastha
+Maintainer: Soumik <soumik@pitt.edu>
+Description: Federated generalized estimating equations with Kauermann-Carroll and Mancl-DeRouen small sample variance corrections.
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.3.3
+Imports: 
+    dplyr,
+    geepack,
+    Matrix,
+    purrr,
+    tibble,
+    Rcpp
+Suggests: 
+    lme4,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
