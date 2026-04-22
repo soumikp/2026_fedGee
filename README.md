@@ -7,12 +7,8 @@
 You can install the development version of FedGEE from source using the `devtools` package:
 
 ```r
-# install.packages("devtools")
-# If installed locally:
-devtools::install("path/to/FedGEE")
-
-# Or if available on GitHub:
-# devtools::install_github("username/FedGEE")
+# install from source available on GitHub:
+# devtools::install_github("soumikp/2026_fedGee")
 ```
 
 ## Features
