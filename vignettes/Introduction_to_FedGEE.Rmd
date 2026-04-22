@@ -1,0 +1,32 @@
+---
+title: "Introduction to FedGEE"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to FedGEE}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Overview
+
+Welcome to **FedGEE** (Federated Generalized Estimating Equations). This package provides a statistically rigorous framework to conduct longitudinal models across isolated data networks seamlessly and privately.
+
+```{r setup}
+library(FedGEE)
+library(dplyr)
+```
+
+## Basic Example
+
+Imagine your longitudinal cohort is distributed across multiple clinical sites...
+
+```{r example}
+# Copy over the toy example simulating your site clusters!
+```
