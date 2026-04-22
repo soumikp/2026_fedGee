@@ -13,8 +13,7 @@ Imports:
     geepack,
     Matrix,
     purrr,
-    tibble,
-    Rcpp
+    tibble
 Suggests: 
     lme4,
     testthat (>= 3.0.0),
