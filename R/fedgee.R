@@ -168,8 +168,11 @@ Prep_FedGEE <- function(data_list,
   # --- Meta-analyze local GLM estimates for initial values ---
   if (length(glm_valid) == 0) {
     message("FedGEE Prep: All local GLMs failed. Initializing all coefficients at 0.")
-    beta_reduced    <- matrix(0, nrow = length(varying_cols) + 1, ncol = 1)
-    se_meta_reduced <- rep(NA_real_, length(varying_cols) + 1)
+    has_intercept   <- "(Intercept)" %in% all_colnames
+    expected_names  <- c(if(has_intercept) "(Intercept)" else NULL, varying_cols)
+    beta_reduced    <- matrix(0, nrow = length(expected_names), ncol = 1)
+    rownames(beta_reduced) <- expected_names
+    se_meta_reduced <- rep(NA_real_, length(expected_names))
   } else {
     beta_hat_list <- map(glm_valid, ~ as.matrix(coef(.x)))
     vcov_list     <- map(glm_valid, ~ as.matrix(vcov(.x)))
@@ -208,7 +211,9 @@ Prep_FedGEE <- function(data_list,
   
   # --- Assemble full-dimension initial beta (site-constant cols = 0) ---
   reduced_names <- rownames(beta_reduced)
-  if (is.null(reduced_names)) reduced_names <- names(coef(glm_valid[[1]]))
+  if (is.null(reduced_names) && length(glm_valid) > 0) {
+    reduced_names <- names(coef(glm_valid[[1]]))
+  }
   
   initial_values <- matrix(0, nrow = p_full, ncol = 1)
   rownames(initial_values) <- all_colnames
