@@ -22,50 +22,30 @@ devtools::install("path/to/FedGEE")
 
 ## Toy Example
 
-The following example demonstrates how to deploy FedGEE across a list of site-specific data frames. This mimics the setting where `fedgee()` is provided with datasets from multiple distinct hospitals or servers.
+Here is a small example using a known built-in R dataset (`ChickWeight`), simulating a scenario where longitudinal patient records are distributed across multiple "sites". 
 
 ```r
 library(FedGEE)
-set.seed(42)
 
-# 1. Simulate data for 3 distinct sites
-simulate_site_data <- function(site_id, n_patients_per_site = 50, records_per_patient = 4) {
-  N <- n_patients_per_site * records_per_patient
-  
-  # Patient IDs
-  pat_id <- rep(paste0("Site", site_id, "_P", 1:n_patients_per_site), each = records_per_patient)
-  
-  # Patient and Observation Covariates
-  age <- rep(rnorm(n_patients_per_site, mean = 50, sd = 10), each = records_per_patient)
-  treatment <- rbinom(N, 1, prob = 0.5)
-  
-  # Simulated outcome (Binary)
-  eta <- -1.0 + 0.05 * age + 0.8 * treatment
-  prob <- exp(eta) / (1 + exp(eta))
-  outcome <- rbinom(N, 1, prob)
-  
-  data.frame(
-    pat_id = pat_id, 
-    age = age, 
-    treatment = treatment, 
-    outcome = outcome
-  )
-}
+# 1. Prepare data using the built-in 'ChickWeight' dataset
+# We'll split the data into 3 arbitrary "sites" based on the Chick ID modulo 3
+data(ChickWeight)
+df <- ChickWeight
 
-# Create a list where each element represents data sitting at a distinct site
-data_list <- list(
-  site1 = simulate_site_data(1),
-  site2 = simulate_site_data(2),
-  site3 = simulate_site_data(3)
-)
+# Create a mock 'site' variable
+df$site <- paste0("Site_", as.numeric(df$Chick) %% 3 + 1)
+
+# Split the dataframe into a list of dataframes by site
+data_list <- split(df, df$site)
 
 # 2. Fit the Federated GEE Model
+# We are modeling weight ~ Time + Diet
 fed_model <- fedgee(
   data_list      = data_list,
-  main_formula   = outcome ~ age + treatment,
-  family_obj     = binomial(link = "logit"),
+  main_formula   = weight ~ Time + Diet,
+  family_obj     = gaussian(link = "identity"),
   corstr         = "exchangeable",     # Working correlation structure
-  id_col         = "pat_id",           # Column indicating clusters (patients)
+  id_col         = "Chick",            # Column indicating clusters
   sandwich_level = "site",             # Level for sandwich variance
   correction     = "KC",               # Kauermann-Carroll small-sample correction
   verbose        = TRUE
