@@ -17,5 +17,6 @@ Imports:
 Suggests: 
     lme4,
     knitr,
-    rmarkdown
+    rmarkdown,
+    ggplot2
 VignetteBuilder: knitr
