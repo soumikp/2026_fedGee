@@ -27,11 +27,7 @@
 #   patient-level sandwich -> df = N - p   (N = total number of patients)
 ###############################################################################
 
-library(geepack)
-library(dplyr)
-library(purrr)
-library(tibble)
-library(Matrix)
+
 
 ###############################################################################
 # 0. CORRELATION MATRIX HELPER
@@ -637,6 +633,13 @@ print.FedGEE <- function(x, ...) {
 #' @param tol Convergence tolerance.
 #' @param verbose Logical; if \code{TRUE}, prints fit progress.
 #' @return An object of class \code{FedGEE}.
+#' @import purrr
+#' @import dplyr
+#' @import geepack
+#' @import Matrix
+#' @import tibble
+#' @importFrom stats as.formula coef gaussian glm pnorm pt qnorm qt var vcov
+#' @importFrom methods as
 #' @export
 fedgee <- function(data_list,
                    main_formula,

@@ -4,7 +4,7 @@
 \alias{print.FedGEE}
 \title{Print Method for Federated GEE}
 \usage{
-\method{print}{FedGEE}(x, ...)
+print.FedGEE(x, ...)
 }
 \arguments{
 \item{x}{An object of class \code{FedGEE}}
