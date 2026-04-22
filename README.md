@@ -35,7 +35,7 @@ df$site <- paste0("Site_", as.numeric(df$Chick) %% 3 + 1)
 data_list <- split(df, df$site)
 
 # 2. Fit the Federated GEE Model
-# We are modeling weight ~ Time + Diet
+# We model weight ~ Time + Diet across our dummy sites
 fed_model <- fedgee(
   data_list      = data_list,
   main_formula   = weight ~ Time + Diet,
@@ -44,9 +44,57 @@ fed_model <- fedgee(
   id_col         = "Chick",            # Column indicating clusters
   sandwich_level = "site",             # Level for sandwich variance
   correction     = "KC",               # Kauermann-Carroll small-sample correction
-  verbose        = TRUE
+  verbose        = FALSE
 )
 
-# 3. View the results
-print(fed_model)
+# 3. Fit the Pooled GEE Model for Comparison
+# This requires the geepack package and the pooled dataset
+library(geepack)
+pooled_model <- geeglm(
+  weight ~ Time + Diet, 
+  data = df[order(df$Chick), ], 
+  id = Chick, 
+  family = gaussian(link = "identity"), 
+  corstr = "exchangeable"
+)
+
+# 4. Compare via Forest Plot
+library(dplyr)
+library(ggplot2)
+
+fed_df <- data.frame(
+  term = names(fed_model$coefficients),
+  estimate = fed_model$coefficients,
+  std.error = fed_model$se,
+  model = "FedGEE"
+)
+
+pooled_sum <- summary(pooled_model)$coefficients
+pooled_df <- data.frame(
+  term = rownames(pooled_sum),
+  estimate = pooled_sum$Estimate,
+  std.error = pooled_sum$Std.err,
+  model = "Pooled GEE"
+)
+
+plot_data <- bind_rows(fed_df, pooled_df) |>
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error
+  )
+
+ggplot(plot_data, aes(x = estimate, y = term, color = model)) +
+  geom_point(position = position_dodge(width = 0.5), size = 2) +
+  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), 
+                position = position_dodge(width = 0.5), width = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  theme_minimal() +
+  labs(
+    title = "Comparison of FedGEE vs Pooled GEE",
+    x = "Estimate (95% CI)",
+    y = "Coefficient",
+    color = "Model"
+  )
 ```
+
+![FedGEE vs Pooled GEE Forest Plot](fedgee_comparison.png)

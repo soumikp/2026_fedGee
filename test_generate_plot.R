@@ -1,7 +1,10 @@
-library(FedGEE)
+# Load dependencies directly since package might not be installed in system path for this script
 library(geepack)
 library(dplyr)
 library(ggplot2)
+library(purrr)
+
+source("R/fedgee.R")
 
 data(ChickWeight)
 df <- ChickWeight
@@ -45,7 +48,7 @@ pooled_df <- data.frame(
   term = rownames(pooled_sum),
   estimate = pooled_sum$Estimate,
   std.error = pooled_sum$Std.err,
-  model = "Pooled GEE"
+  model = "Pooled-GEE"
 )
 
 # Combine and calculate 95% CI
