@@ -2,7 +2,6 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/soumikp/2026_fedGee/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/soumikp/2026_fedGee/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/soumikp/2026_fedGee/graph/badge.svg)](https://app.codecov.io/gh/soumikp/2026_fedGee)
 <!-- badges: end -->
 **FedGEE** (Federated Generalized Estimating Equations) provides a robust framework for fitting generalized estimating equations across distributed datasets (e.g., multi-center health networks) without pooling patient-level data. It includes small-sample variance corrections (Kauermann-Carroll and Mancl-DeRouen) which are applied directly in the score space to preserve privacy and statistical validity when the number of contributing sites is small.
 

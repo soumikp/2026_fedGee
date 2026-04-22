@@ -16,8 +16,6 @@ Imports:
     tibble
 Suggests: 
     lme4,
-    testthat (>= 3.0.0),
     knitr,
     rmarkdown
 VignetteBuilder: knitr
-Config/testthat/edition: 3
