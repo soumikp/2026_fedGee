@@ -28,9 +28,7 @@ library(dplyr)
 Imagine your longitudinal cohort is distributed across multiple clinical sites...
 
 ```{r example}
-library(FedGEE)
 library(geepack)
-library(dplyr)
 library(ggplot2)
 
 data(ChickWeight)
