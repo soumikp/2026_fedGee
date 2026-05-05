@@ -28,25 +28,25 @@
 ###############################################################################
 
 
-
 ###############################################################################
 # 0. CORRELATION MATRIX HELPER
 ###############################################################################
 get_Ri <- function(corstr, phi, n) {
-  if (corstr == "independence" || n == 1)
+  if (corstr == "independence" || n == 1) {
     return(diag(1, n))
-  
+  }
+
   if (corstr == "exchangeable") {
     Ri <- matrix(as.numeric(phi), n, n)
     diag(Ri) <- 1
     return(Ri)
   }
-  
+
   if (corstr == "ar1") {
     exponent <- abs(outer(1:n, 1:n, "-"))
     return(as.numeric(phi)^exponent)
   }
-  
+
   if (corstr == "unstructured") {
     Ri <- diag(1, n)
     if (length(phi) == (n * (n - 1) / 2)) {
@@ -57,7 +57,7 @@ get_Ri <- function(corstr, phi, n) {
     }
     return(Ri)
   }
-  
+
   return(diag(1, n))
 }
 
@@ -78,7 +78,9 @@ get_Ri <- function(corstr, phi, n) {
     eigen(M, symmetric = TRUE),
     error = function(e) NULL
   )
-  if (is.null(eig)) return(diag(nrow(M)))
+  if (is.null(eig)) {
+    return(diag(nrow(M)))
+  }
   vals_inv <- 1 / pmax(eig$values^power, floor_val)
   eig$vectors %*% diag(vals_inv, nrow = length(vals_inv)) %*% t(eig$vectors)
 }
@@ -101,44 +103,45 @@ Prep_FedGEE <- function(data_list,
                         family_obj,
                         corstr,
                         id_col) {
-  
   N_sites <- length(data_list)
-  y_name  <- all.vars(main_formula)[1]
-  
+  y_name <- all.vars(main_formula)[1]
+
   # --- Identify site-level constant columns ---
   full_X_example <- model.matrix(main_formula, data = data_list[[1]])
-  all_colnames   <- colnames(full_X_example)
-  p_full         <- length(all_colnames)
-  
+  all_colnames <- colnames(full_X_example)
+  p_full <- length(all_colnames)
+
   site_constant_flags <- matrix(FALSE, nrow = N_sites, ncol = p_full)
   colnames(site_constant_flags) <- all_colnames
-  
+
   for (i in seq_len(N_sites)) {
-    X_i    <- model.matrix(main_formula, data = data_list[[i]])
+    X_i <- model.matrix(main_formula, data = data_list[[i]])
     col_var <- apply(X_i, 2, var)
     site_constant_flags[i, ] <- (col_var < 1e-15)
   }
-  
+
   # A column is site-level constant only if it is constant at EVERY site
   site_level_constant <- apply(site_constant_flags, 2, all)
-  site_level_constant["(Intercept)"] <- FALSE   # intercept is always "constant" but is not a site covariate
-  
+  site_level_constant["(Intercept)"] <- FALSE # intercept is always "constant" but is not a site covariate
+
   constant_cols <- names(which(site_level_constant))
-  varying_cols  <- setdiff(all_colnames, c("(Intercept)", constant_cols))
-  
+  varying_cols <- setdiff(all_colnames, c("(Intercept)", constant_cols))
+
   if (length(constant_cols) > 0) {
-    message("FedGEE Prep: Detected site-level covariates (zero within-site variance at all sites):\n  ",
-            paste(constant_cols, collapse = ", "),
-            "\n  Initialized at 0; estimated via between-site variation during server updates.")
+    message(
+      "FedGEE Prep: Detected site-level covariates (zero within-site variance at all sites):\n  ",
+      paste(constant_cols, collapse = ", "),
+      "\n  Initialized at 0; estimated via between-site variation during server updates."
+    )
   }
-  
+
   # --- Reduced formula for local fits (excludes site-constant terms) ---
   if (length(varying_cols) > 0) {
     reduced_formula <- as.formula(paste(y_name, "~", paste(varying_cols, collapse = " + ")))
   } else {
     reduced_formula <- as.formula(paste(y_name, "~ 1"))
   }
-  
+
   # --- Local GLM fits for initial beta values ---
   # GLM (not GEE) used here: only rough starting values needed; the
   # iterative protocol corrects them. GLM model-based SEs are always
@@ -148,88 +151,97 @@ Prep_FedGEE <- function(data_list,
       suppressWarnings(glm(reduced_formula, data = df, family = family_obj)),
       error = function(e) NULL
     )
-    if (is.null(fit) || !fit$converged || any(is.na(coef(fit)))) return(NULL)
+    if (is.null(fit) || !fit$converged || any(is.na(coef(fit)))) {
+      return(NULL)
+    }
     fit
   })
-  
+
   valid_idx <- !map_lgl(glm_local, is.null)
   glm_valid <- glm_local[valid_idx]
-  n_failed  <- sum(!valid_idx)
-  
-  if (n_failed > 0)
+  n_failed <- sum(!valid_idx)
+
+  if (n_failed > 0) {
     message(sprintf(
       "FedGEE Prep: %d / %d sites excluded from initialization (aliased coefs, non-convergence, or error). They will still participate in the iterative protocol.",
-      n_failed, N_sites))
-  
+      n_failed, N_sites
+    ))
+  }
+
   # --- Meta-analyze local GLM estimates for initial values ---
   if (length(glm_valid) == 0) {
     message("FedGEE Prep: All local GLMs failed. Initializing all coefficients at 0.")
-    has_intercept   <- "(Intercept)" %in% all_colnames
-    expected_names  <- c(if(has_intercept) "(Intercept)" else NULL, varying_cols)
-    beta_reduced    <- matrix(0, nrow = length(expected_names), ncol = 1)
+    has_intercept <- "(Intercept)" %in% all_colnames
+    expected_names <- c(if (has_intercept) "(Intercept)" else NULL, varying_cols)
+    beta_reduced <- matrix(0, nrow = length(expected_names), ncol = 1)
     rownames(beta_reduced) <- expected_names
     se_meta_reduced <- rep(NA_real_, length(expected_names))
   } else {
     beta_hat_list <- map(glm_valid, ~ as.matrix(coef(.x)))
-    vcov_list     <- map(glm_valid, ~ as.matrix(vcov(.x)))
+    vcov_list <- map(glm_valid, ~ as.matrix(vcov(.x)))
     inv_vcov_list <- map(vcov_list, ~ tryCatch(solve(.x), error = function(e) NULL))
-    
+
     ok <- !map_lgl(inv_vcov_list, is.null)
     if (sum(ok) == 0) {
-      beta_reduced    <- as.matrix(coef(glm_valid[[1]]))
+      beta_reduced <- as.matrix(coef(glm_valid[[1]]))
       se_meta_reduced <- sqrt(diag(vcov(glm_valid[[1]])))
     } else {
       beta_hat_list <- beta_hat_list[ok]
       inv_vcov_list <- inv_vcov_list[ok]
-      den          <- Reduce(`+`, inv_vcov_list)
-      num          <- Reduce(`+`, map2(inv_vcov_list, beta_hat_list, `%*%`))
-      beta_reduced    <- solve(den, num)
+      den <- Reduce(`+`, inv_vcov_list)
+      num <- Reduce(`+`, map2(inv_vcov_list, beta_hat_list, `%*%`))
+      beta_reduced <- solve(den, num)
       se_meta_reduced <- sqrt(diag(solve(den)))
     }
   }
-  
+
   # --- Local GEE fits to extract working correlation alpha ---
   if (corstr != "independence") {
     alpha_list <- map(data_list, function(df) {
       df[[".id_var"]] <- df[[id_col]]
       fit <- tryCatch(
-        geeglm(reduced_formula, data = df, family = family_obj,
-               id = .id_var, corstr = corstr),
+        geeglm(reduced_formula,
+          data = df, family = family_obj,
+          id = .id_var, corstr = corstr
+        ),
         error = function(e) NULL
       )
-      if (is.null(fit)) return(0)
+      if (is.null(fit)) {
+        return(0)
+      }
       a <- fit$geese$alpha
       if (length(a) == 0) 0 else a
     })
   } else {
-    alpha_list <- map(data_list, ~ 0)
+    alpha_list <- map(data_list, ~0)
   }
-  
+
   # --- Assemble full-dimension initial beta (site-constant cols = 0) ---
   reduced_names <- rownames(beta_reduced)
   if (is.null(reduced_names) && length(glm_valid) > 0) {
     reduced_names <- names(coef(glm_valid[[1]]))
   }
-  
+
   initial_values <- matrix(0, nrow = p_full, ncol = 1)
   rownames(initial_values) <- all_colnames
   initial_se <- rep(NA_real_, p_full)
   names(initial_se) <- all_colnames
-  
+
   for (nm in reduced_names) {
     if (nm %in% all_colnames) {
-      i_full    <- which(all_colnames == nm)
+      i_full <- which(all_colnames == nm)
       i_reduced <- which(reduced_names == nm)
       initial_values[i_full, 1] <- beta_reduced[i_reduced, 1]
-      initial_se[i_full]        <- se_meta_reduced[i_reduced]
+      initial_se[i_full] <- se_meta_reduced[i_reduced]
     }
   }
-  
+
   # Guarantee every site has an alpha entry
   alpha_full <- vector("list", N_sites)
-  for (i in seq_len(N_sites))
+  for (i in seq_len(N_sites)) {
     alpha_full[[i]] <- if (i <= length(alpha_list)) alpha_list[[i]] else 0
-  
+  }
+
   list(
     initial_values  = initial_values,
     initial_se      = initial_se,
@@ -266,100 +278,107 @@ get_site_stats <- function(site_data,
                            id_col,
                            corstr,
                            sandwich_level = "site",
-                           correction     = "none",
-                           B_global       = NULL) {
-  
+                           correction = "none",
+                           B_global = NULL) {
   stopifnot(correction %in% c("none", "KC", "MD"))
   stopifnot(sandwich_level %in% c("site", "patient"))
-  
+
   beta_curr <- as.matrix(beta_global)
-  y_name    <- all.vars(main_formula)[1]
-  Full_X    <- model.matrix(main_formula, data = site_data)
-  Full_y    <- site_data[[y_name]]
-  p         <- ncol(Full_X)
-  
-  cluster_IDs    <- unique(site_data[[id_col]])
-  n_clust        <- length(cluster_IDs)
+  y_name <- all.vars(main_formula)[1]
+  Full_X <- model.matrix(main_formula, data = site_data)
+  Full_y <- site_data[[y_name]]
+  p <- ncol(Full_X)
+
+  cluster_IDs <- unique(site_data[[id_col]])
+  n_clust <- length(cluster_IDs)
   Bread_clusters <- vector("list", n_clust)
   Score_clusters <- vector("list", n_clust)
-  
+
   idx <- 0L
   for (j in cluster_IDs) {
-    idx     <- idx + 1L
+    idx <- idx + 1L
     row_idx <- which(site_data[[id_col]] == j)
-    X_j     <- Full_X[row_idx, , drop = FALSE]
-    y_j     <- Full_y[row_idx]
-    n_j     <- length(y_j)
-    
-    eta_j      <- as.vector(X_j %*% beta_curr)
-    mu_j       <- family_obj$linkinv(eta_j)
+    X_j <- Full_X[row_idx, , drop = FALSE]
+    y_j <- Full_y[row_idx]
+    n_j <- length(y_j)
+
+    eta_j <- as.vector(X_j %*% beta_curr)
+    mu_j <- family_obj$linkinv(eta_j)
     dmu_deta_j <- family_obj$mu.eta(eta_j)
-    var_mu_j   <- pmax(family_obj$variance(mu_j), 1e-12)
-    D_j        <- dmu_deta_j * X_j          # n_j x p
-    A_half_j   <- sqrt(var_mu_j)
-    
+    var_mu_j <- pmax(family_obj$variance(mu_j), 1e-12)
+    D_j <- dmu_deta_j * X_j # n_j x p
+    A_half_j <- sqrt(var_mu_j)
+
     if (corstr == "independence" || n_j == 1) {
       V_inv_diag <- 1 / var_mu_j
-      V_inv_r    <- V_inv_diag * (y_j - mu_j)
-      V_inv_D    <- V_inv_diag * D_j
+      V_inv_r <- V_inv_diag * (y_j - mu_j)
+      V_inv_D <- V_inv_diag * D_j
     } else {
-      R_j     <- get_Ri(corstr, alpha, n_j)
-      V_j     <- (A_half_j %o% A_half_j) * R_j
+      R_j <- get_Ri(corstr, alpha, n_j)
+      V_j <- (A_half_j %o% A_half_j) * R_j
       V_inv_j <- tryCatch(solve(V_j), error = function(e) NULL)
       if (is.null(V_inv_j)) next
       V_inv_r <- V_inv_j %*% (y_j - mu_j)
       V_inv_D <- V_inv_j %*% D_j
     }
-    
-    Bread_clusters[[idx]] <- crossprod(D_j, V_inv_D)   # B_j = D' V^{-1} D
-    Score_clusters[[idx]] <- crossprod(D_j, V_inv_r)   # S_j = D' V^{-1} r
+
+    Bread_clusters[[idx]] <- crossprod(D_j, V_inv_D) # B_j = D' V^{-1} D
+    Score_clusters[[idx]] <- crossprod(D_j, V_inv_r) # S_j = D' V^{-1} r
   }
-  
-  keep           <- !sapply(Bread_clusters, is.null)
+
+  keep <- !sapply(Bread_clusters, is.null)
   Bread_clusters <- Bread_clusters[keep]
   Score_clusters <- Score_clusters[keep]
-  if (length(Bread_clusters) == 0) return(NULL)
-  
+  if (length(Bread_clusters) == 0) {
+    return(NULL)
+  }
+
   B_site <- Reduce(`+`, Bread_clusters)
   S_site <- Reduce(`+`, Score_clusters)
-  
+
   # ---------------------------------------------------------------------------
   # Helper: apply score-space correction given a bread and score vector.
   # power = 0.5 for KC, power = 1.0 for MD.
   # ---------------------------------------------------------------------------
   .apply_correction <- function(B_unit, S_unit, B_global_inv, power) {
-    H    <- B_unit %*% B_global_inv      # leverage: H_ii or H_jj
-    I_H  <- diag(p) - H
-    A    <- .mat_pow_inv(I_H, power = power)
+    H <- B_unit %*% B_global_inv # leverage: H_ii or H_jj
+    I_H <- diag(p) - H
+    A <- .mat_pow_inv(I_H, power = power)
     A %*% S_unit
   }
-  
+
   # ---------------------------------------------------------------------------
   # Compute meat according to sandwich_level and correction
   # ---------------------------------------------------------------------------
   need_correction <- (correction != "none") && !is.null(B_global)
-  power <- switch(correction, "KC" = 0.5, "MD" = 1.0, 0)   # 0 unused for "none"
-  
+  power <- switch(correction,
+    "KC" = 0.5,
+    "MD" = 1.0,
+    0
+  ) # 0 unused for "none"
+
   if (sandwich_level == "site") {
-    
     if (need_correction) {
       B_global_inv <- tryCatch(solve(B_global), error = function(e) NULL)
       S_adj <- if (!is.null(B_global_inv)) {
         .apply_correction(B_site, S_site, B_global_inv, power)
-      } else S_site
+      } else {
+        S_site
+      }
     } else {
       S_adj <- S_site
     }
     M_site <- tcrossprod(S_adj)
-    
-  } else {  # sandwich_level == "patient"
-    
+  } else { # sandwich_level == "patient"
+
     if (need_correction) {
       B_global_inv <- tryCatch(solve(B_global), error = function(e) NULL)
       M_list <- lapply(seq_along(Score_clusters), function(i) {
         S_adj <- if (!is.null(B_global_inv)) {
           .apply_correction(Bread_clusters[[i]], Score_clusters[[i]], B_global_inv, power)
-        } else Score_clusters[[i]]
+        } else {
+          Score_clusters[[i]]
+        }
         tcrossprod(S_adj)
       })
     } else {
@@ -367,7 +386,7 @@ get_site_stats <- function(site_data,
     }
     M_site <- Reduce(`+`, M_list)
   }
-  
+
   list(
     Bread      = B_site,
     Score      = S_site,
@@ -385,38 +404,43 @@ get_site_stats <- function(site_data,
 aggregate_FedGEE <- function(site_results_list,
                              current_beta,
                              sandwich_level = "site") {
-  
   param_names <- names(current_beta) %||% rownames(current_beta)
-  valid       <- Filter(Negate(is.null), site_results_list)
-  if (length(valid) == 0) return(NULL)
-  
-  B_total    <- Reduce(`+`, map(valid, "Bread"))
-  S_total    <- Reduce(`+`, map(valid, "Score"))
-  M_total    <- Reduce(`+`, map(valid, "Meat"))
-  n_sites    <- length(valid)
+  valid <- Filter(Negate(is.null), site_results_list)
+  if (length(valid) == 0) {
+    return(NULL)
+  }
+
+  B_total <- Reduce(`+`, map(valid, "Bread"))
+  S_total <- Reduce(`+`, map(valid, "Score"))
+  M_total <- Reduce(`+`, map(valid, "Meat"))
+  n_sites <- length(valid)
   n_patients <- sum(map_dbl(valid, "n_clusters"))
-  
+
   # Newton-Raphson update
   update_step <- tryCatch(solve(B_total, S_total), error = function(e) NULL)
-  if (is.null(update_step)) return(NULL)
+  if (is.null(update_step)) {
+    return(NULL)
+  }
   new_beta <- current_beta + update_step
-  
-  p     <- length(new_beta)
+
+  p <- length(new_beta)
   B_inv <- tryCatch(solve(B_total), error = function(e) NULL)
-  if (is.null(B_inv)) return(NULL)
-  
+  if (is.null(B_inv)) {
+    return(NULL)
+  }
+
   vcov_mat <- B_inv %*% M_total %*% B_inv
-  se_beta  <- setNames(sqrt(diag(vcov_mat)), param_names)
-  
+  se_beta <- setNames(sqrt(diag(vcov_mat)), param_names)
+
   # df = (independent clusters) - (parameters)
   if (sandwich_level == "site") {
-    df_residual    <- n_sites - p
+    df_residual <- n_sites - p
     total_clusters <- n_sites
   } else {
-    df_residual    <- n_patients - p
+    df_residual <- n_patients - p
     total_clusters <- n_patients
   }
-  
+
   list(
     estimate       = new_beta,
     se             = se_beta,
@@ -450,15 +474,14 @@ train_FedGEE <- function(data_list,
                          family_obj,
                          corstr,
                          id_col,
-                         n_iter         = 50,
-                         tol            = 1e-8,
+                         n_iter = 50,
+                         tol = 1e-8,
                          sandwich_level = "site",
-                         correction     = "none",
-                         verbose        = TRUE) {
-  
+                         correction = "none",
+                         verbose = TRUE) {
   stopifnot(sandwich_level %in% c("site", "patient"))
   stopifnot(correction %in% c("none", "KC", "MD"))
-  
+
   if (verbose) {
     cat("=== Fed-GEE ===\n")
     cat("  Family          :", family_obj$family, "|", family_obj$link, "\n")
@@ -467,14 +490,13 @@ train_FedGEE <- function(data_list,
     cat("  SS correction   :", correction, "\n")
     cat("  Sites           :", length(data_list), "\n\n")
   }
-  
-  N_sites   <- length(data_list)
+
+  N_sites <- length(data_list)
   beta_curr <- initial_beta
   converged <- FALSE
-  history   <- list(beta_curr)
-  
+  history <- list(beta_curr)
+
   for (k in seq_len(n_iter)) {
-    
     # --- Pass 1 site computation: no correction during iteration ---
     site_outputs <- vector("list", N_sites)
     for (i in seq_len(N_sites)) {
@@ -492,20 +514,20 @@ train_FedGEE <- function(data_list,
         B_global       = NULL
       )
     }
-    
+
     global_update <- aggregate_FedGEE(site_outputs, beta_curr, sandwich_level)
     if (is.null(global_update)) {
       if (verbose) cat("  Singularity in aggregation — stopping.\n")
       return(NULL)
     }
-    
+
     beta_next <- global_update$estimate
     diff_norm <- sqrt(sum((beta_curr - beta_next)^2))
     if (verbose) cat(sprintf("  Iter %3d  | update norm = %.3e\n", k, diff_norm))
-    
-    beta_curr        <- beta_next
+
+    beta_curr <- beta_next
     history[[k + 1]] <- beta_curr
-    
+
     if (diff_norm < tol) {
       converged <- TRUE
       if (verbose) cat("  Converged.\n\n")
@@ -516,10 +538,10 @@ train_FedGEE <- function(data_list,
       return(NULL)
     }
   }
-  
+
   # --- Pass 2: recompute meat at converged beta with chosen correction ---
   B_global_final <- global_update$Bread
-  
+
   site_outputs_final <- vector("list", N_sites)
   for (i in seq_len(N_sites)) {
     if (is.null(alpha[[i]])) next
@@ -536,15 +558,15 @@ train_FedGEE <- function(data_list,
       B_global       = B_global_final
     )
   }
-  
+
   final_result <- aggregate_FedGEE(site_outputs_final, beta_curr, sandwich_level)
   if (is.null(final_result)) {
     warning("FedGEE: final variance pass failed; returning uncorrected sandwich.")
     final_result <- global_update
   }
-  
+
   coef_names <- rownames(initial_beta) %||% names(initial_beta)
-  
+
   structure(
     list(
       coefficients   = setNames(as.vector(beta_curr), coef_names),
@@ -580,33 +602,37 @@ print.FedGEE <- function(x, ...) {
   cat("  Working correlation :", x$corstr, "\n")
   cat("  Sandwich level      :", x$sandwich_level, "\n")
   cat("  SS correction       :", x$correction, "\n")
-  cat("  Sites               :", x$n_sites,
-      "| Patients:", x$n_patients, "\n")
+  cat(
+    "  Sites               :", x$n_sites,
+    "| Patients:", x$n_patients, "\n"
+  )
   cat("  df residual         :", x$df_residual, "\n")
-  cat("  Converged           :", x$converged,
-      "in", x$iterations, "iterations\n")
-  
+  cat(
+    "  Converged           :", x$converged,
+    "in", x$iterations, "iterations\n"
+  )
+
   est <- x$coefficients
-  se  <- x$se
-  z   <- est / se
-  
+  se <- x$se
+  z <- est / se
+
   if (!is.null(x$df_residual) && x$df_residual > 0) {
-    pval    <- 2 * pt(-abs(z), df = x$df_residual)
+    pval <- 2 * pt(-abs(z), df = x$df_residual)
     ci_mult <- qt(0.975, df = x$df_residual)
     cat(sprintf("  Inference           : t(%d)\n\n", x$df_residual))
   } else {
-    pval    <- 2 * pnorm(-abs(z))
+    pval <- 2 * pnorm(-abs(z))
     ci_mult <- qnorm(0.975)
     cat("  Inference           : z\n\n")
   }
-  
+
   tab <- data.frame(
     Estimate = round(est, 4),
-    SE       = round(se, 4),
-    CI.lo    = round(est - ci_mult * se, 4),
-    CI.hi    = round(est + ci_mult * se, 4),
-    `z/t`    = round(z, 3),
-    p.value  = round(pval, 4),
+    SE = round(se, 4),
+    CI.lo = round(est - ci_mult * se, 4),
+    CI.hi = round(est + ci_mult * se, 4),
+    `z/t` = round(z, 3),
+    p.value = round(pval, 4),
     check.names = FALSE
   )
   print(tab)
@@ -643,17 +669,16 @@ print.FedGEE <- function(x, ...) {
 #' @export
 fedgee <- function(data_list,
                    main_formula,
-                   family_obj     = binomial(link = "logit"),
-                   corstr         = "independence",
-                   id_col         = "pat_id",
+                   family_obj = binomial(link = "logit"),
+                   corstr = "independence",
+                   id_col = "pat_id",
                    sandwich_level = "site",
-                   correction     = "KC",
-                   n_iter         = 50,
-                   tol            = 1e-8,
-                   verbose        = TRUE) {
-  
+                   correction = "KC",
+                   n_iter = 50,
+                   tol = 1e-8,
+                   verbose = TRUE) {
   prep <- Prep_FedGEE(data_list, main_formula, family_obj, corstr, id_col)
-  
+
   train_FedGEE(
     data_list      = data_list,
     initial_beta   = prep$initial_values,
@@ -668,4 +693,112 @@ fedgee <- function(data_list,
     correction     = correction,
     verbose        = verbose
   )
+}
+
+
+# =====================================================================
+# 1. DP SITE-LEVEL COMPUTATION (Patient Clipping + Gaussian Noise)
+# =====================================================================
+get_site_stats_DP <- function(site_data, beta_global, alpha, main_formula, family_obj, id_col, corstr,
+                              C_S = 5.0, C_B = 2.0, sigma_S = 1.0, sigma_B = 1.0) {
+  beta_curr <- as.matrix(beta_global)
+  y_name <- all.vars(main_formula)[1]
+  Full_X <- model.matrix(main_formula, data = site_data)
+  Full_y <- site_data[[y_name]]
+  p <- ncol(Full_X)
+
+  cluster_IDs <- unique(site_data[[id_col]])
+  n_clust <- length(cluster_IDs)
+
+  # Initialize local DP accumulators
+  B_site_clean <- matrix(0, p, p)
+  S_site_clean <- matrix(0, p, 1)
+
+  for (j in cluster_IDs) {
+    row_idx <- which(site_data[[id_col]] == j)
+    X_j <- Full_X[row_idx, , drop = FALSE]
+    y_j <- Full_y[row_idx]
+    n_j <- length(y_j)
+
+    eta_j <- as.vector(X_j %*% beta_curr)
+    mu_j <- family_obj$linkinv(eta_j)
+    dmu_deta_j <- family_obj$mu.eta(eta_j)
+    var_mu_j <- pmax(family_obj$variance(mu_j), 1e-12)
+    D_j <- dmu_deta_j * X_j
+
+    # Assuming independence for the toy example to simplify matrix math
+    V_inv_diag <- 1 / var_mu_j
+    V_inv_r <- V_inv_diag * (y_j - mu_j)
+    V_inv_D <- V_inv_diag * D_j
+
+    # 1. Calculate Patient Exact Stats
+    B_j <- crossprod(D_j, V_inv_D)
+    S_j <- crossprod(D_j, V_inv_r)
+
+    # 2. PATIENT-LEVEL CLIPPING (The Privacy Boundary)
+    norm_S <- sqrt(sum(S_j^2))
+    norm_B <- sqrt(sum(B_j^2)) # Frobenius norm
+
+    S_j_clip <- S_j / max(1, norm_S / C_S)
+    B_j_clip <- B_j / max(1, norm_B / C_B)
+
+    # 3. Aggregate Clipped Values
+    B_site_clean <- B_site_clean + B_j_clip
+    S_site_clean <- S_site_clean + S_j_clip
+  }
+
+  # 4. INJECT GAUSSIAN NOISE
+  # Noise scaled by sensitivity limit (C) and DP multiplier (sigma)
+  noise_S <- matrix(rnorm(p, mean = 0, sd = sigma_S * C_S), nrow = p, ncol = 1)
+  noise_B <- matrix(rnorm(p * p, mean = 0, sd = sigma_B * C_B), nrow = p, ncol = p)
+
+  S_site_DP <- S_site_clean + noise_S
+  B_site_DP <- B_site_clean + noise_B
+
+  list(Bread = B_site_DP, Score = S_site_DP, n_clusters = n_clust)
+}
+
+# =====================================================================
+# 2. DP SERVER AGGREGATION (PSD Projection + Levenberg-Marquardt)
+# =====================================================================
+# =====================================================================
+# 2. DP SERVER AGGREGATION (PSD Projection + Levenberg-Marquardt)
+# =====================================================================
+aggregate_FedGEE_DP <- function(site_results_list, current_beta,
+                                tau = 1e-4, gamma = 5.0) {
+  valid <- Filter(Negate(is.null), site_results_list)
+  if (length(valid) == 0) {
+    return(NULL)
+  }
+
+  # FIX: Use standard base R list extraction
+  B_noisy <- Reduce(`+`, lapply(valid, function(x) x$Bread))
+  S_noisy <- Reduce(`+`, lapply(valid, function(x) x$Score))
+  p <- length(current_beta)
+
+  # 1. SYMMETRIZE (Fix noise asymmetries)
+  B_sym <- (B_noisy + t(B_noisy)) / 2
+
+  # 2. PSD PROJECTION (Eigenvalue thresholding)
+  eig <- eigen(B_sym, symmetric = TRUE)
+
+  # Check if noise pushed eigenvalues below zero (for printing only)
+  if (any(eig$values < 0)) cat("    [!] Server caught negative eigenvalues. Projecting to PSD cone...\n")
+
+  vals_proj <- pmax(eig$values, tau)
+  B_proj <- eig$vectors %*% diag(vals_proj, nrow = p) %*% t(eig$vectors)
+
+  # 3. LEVENBERG-MARQUARDT DAMPING (Ridge Penalty)
+  B_reg <- B_proj + diag(gamma, p)
+
+  # 4. SAFE UPDATE
+  update_step <- tryCatch(solve(B_reg, S_noisy), error = function(e) NULL)
+  if (is.null(update_step)) {
+    cat("    [!] Matrix critically singular even after regularization.\n")
+    return(NULL)
+  }
+
+  new_beta <- current_beta + update_step
+
+  list(estimate = new_beta, Bread_projected = B_proj)
 }
