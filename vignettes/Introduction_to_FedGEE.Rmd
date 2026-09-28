@@ -8,94 +8,101 @@ vignette: >
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
 ## Overview
 
-Welcome to **FedGEE** (Federated Generalized Estimating Equations). This package provides a statistically rigorous framework to conduct longitudinal models across isolated data networks seamlessly and privately.
+**FedGEE** fits a generalized estimating equation across sites that never
+pool patient data. Each site sends only $p \times p$ summaries: its bread
+$B_i$ and its score $S_i$. There are two ways to combine them:
+
+- `fedgee()`: a central server sums the summaries. The estimate equals pooled
+  GEE.
+- `decentralized_fedgee()`: there is no server. Sites average with their
+  neighbours over a network (gossip). With enough rounds it reproduces
+  `fedgee()`.
+
+With few sites the usual sandwich is too small. FedGEE corrects it in score
+space, using only the site summaries.
 
 ```{r setup}
 library(FedGEE)
-library(dplyr)
+data(ChickWeight)
+cw <- as.data.frame(ChickWeight)
+cw$site <- as.integer(cw$Chick) %% 12
+data_list <- split(cw, cw$site)
 ```
 
-## Basic Example
+## Centralized fit
 
-Imagine your longitudinal cohort is distributed across multiple clinical sites...
+One call computes every correction. The printout shows the default:
+Kauermann–Carroll (KC) with Bell–McCaffrey degrees of freedom.
 
-```{r example}
-library(geepack)
-library(ggplot2)
-
-data(ChickWeight)
-df <- ChickWeight
-df$site <- paste0("Site_", as.numeric(df$Chick) %% 3 + 1)
-data_list <- split(df, df$site)
-
-# 1. FedGEE Model
-fed_model <- fedgee(
-  data_list      = data_list,
-  main_formula   = weight ~ Time + Diet,
-  family_obj     = gaussian(link = "identity"),
-  corstr         = "exchangeable",     
-  id_col         = "Chick",            
-  sandwich_level = "site",             
-  correction     = "KC",               
-  verbose        = FALSE
+```{r fit}
+fit <- fedgee(
+  data_list, weight ~ Time + Diet,
+  family_obj = gaussian(), id_col = "Chick", verbose = FALSE
 )
+fit
+```
 
-# 2. Pooled Model
-pooled_model <- geeglm(
-  weight ~ Time + Diet, 
-  data = df[order(df$Chick), ], 
-  id = Chick, 
-  family = gaussian(link = "identity"), 
-  corstr = "exchangeable"
+You can show any other variant without refitting:
+
+```{r variants}
+summary(fit, correction = "MD", df = "K-1")
+sapply(fit$variances$site, function(v) round(v$se, 3))
+```
+
+The point estimate and the uncorrected sandwich match pooled GEE clustered
+by site:
+
+```{r pooled}
+pooled <- geepack::geeglm(weight ~ Time + Diet,
+  data = cw[order(cw$site), ], id = site,
+  family = gaussian(), corstr = "independence"
 )
+all.equal(unname(coef(fit)), unname(coef(pooled)))
+all.equal(unname(vcov(fit, "none")), unname(vcov(pooled)))
+```
 
-# Extract FedGEE coefficients and standard errors
-fed_est <- fed_model$coefficients
-fed_se <- fed_model$se
-fed_df <- data.frame(
-  term = names(fed_est),
-  estimate = fed_est,
-  std.error = fed_se,
-  model = "FedGEE"
+### Which correction?
+
+- **KC + `df = "bm"`** (the default). KC is unbiased under the working model.
+  The Bell–McCaffrey df adapts to unequal site sizes. In simulation this pair
+  gave close to nominal coverage in every setting.
+- **MD** is conservative. **FG** is a diagonal alternative. It rarely
+  differs from KC unless one site has very high leverage (see
+  `fit$diagnostics$max_leverage`).
+- The site-level sandwich has rank $\min(p, K-1)$. Keep $p$ well below the
+  number of sites. `fedgee()` warns when the sandwich is singular.
+
+## Decentralized fit
+
+`build_weight_matrix()` builds the gossip matrix and reports its mixing rate
+$\rho$. Disagreement between sites shrinks like $\rho^L$ after $L$ rounds.
+
+```{r network}
+sapply(c("complete", "hub", "ring"), function(s) build_weight_matrix(12, s)$rho)
+```
+
+On a ring, a few rounds per iteration leave the sites disagreeing. More
+rounds recover the centralized fit:
+
+```{r dec}
+few <- decentralized_fedgee(data_list, weight ~ Time + Diet,
+  family_obj = gaussian(), id_col = "Chick", structure = "ring",
+  sandwich_level = "site", correction = "KC",
+  L_beta = 5, L_S = 5, L_B = 5, verbose = FALSE
 )
-
-# Extract Pooled GEE coefficients and standard errors
-pooled_sum <- summary(pooled_model)$coefficients
-pooled_df <- data.frame(
-  term = rownames(pooled_sum),
-  estimate = pooled_sum$Estimate,
-  std.error = pooled_sum$Std.err,
-  model = "Pooled GEE"
+many <- decentralized_fedgee(data_list, weight ~ Time + Diet,
+  family_obj = gaussian(), id_col = "Chick", structure = "ring",
+  sandwich_level = "site", correction = "KC",
+  L_beta = 150, L_S = 150, L_B = 150, tol = 1e-6, verbose = FALSE
 )
-
-# Combine and calculate 95% CI
-plot_data <- bind_rows(fed_df, pooled_df) |>
-  mutate(
-    conf.low = estimate - 1.96 * std.error,
-    conf.high = estimate + 1.96 * std.error
-  )
-
-# Plot
-p <- ggplot(plot_data, aes(x = estimate, y = term, color = model)) +
-  geom_point(position = position_dodge(width = 0.5), size = 2) +
-  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), 
-                position = position_dodge(width = 0.5), width = 0.2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-  theme_minimal() +
-  labs(
-    title = "Comparison of FedGEE vs Pooled GEE",
-    x = "Estimate (95% CI)",
-    y = "Coefficient",
-    color = "Model"
-  )
-
-print(p)
+rbind(
+  centralized = fit$se,
+  ring_L5 = few$se,
+  ring_L150 = many$se
+)
 ```

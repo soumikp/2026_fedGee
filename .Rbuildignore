@@ -1,1 +1,15 @@
-
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.Rlib$
+^\.claude$
+^inst/(?!doc(/|$))
+^HANDOFF\.md$
+^OUTLINE\.md$
+^slide_outline\.md$
+^README\.md$
+^Rplots\.pdf$
+^bio\.html$
+^ibs\.html$
+^fedgee_comparison\.png$
+^\.DS_Store$
+^\.Rhistory$

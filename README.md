@@ -1,101 +1,68 @@
 # FedGEE
 
-
-**FedGEE** (Federated Generalized Estimating Equations) provides a robust framework for fitting generalized estimating equations across distributed datasets (e.g., multi-center health networks) without pooling patient-level data. It includes small-sample variance corrections (Kauermann-Carroll and Mancl-DeRouen) which are applied directly in the score space to preserve privacy and statistical validity when the number of contributing sites is small.
+**FedGEE** fits generalized estimating equations (GEE) across sites that
+never pool patient data, such as hospitals in a health network. Sites share
+only small $p \times p$ summary matrices. The package gives valid inference
+even when there are only a few sites.
 
 ## Installation
 
-You can install the development version of FedGEE from source using the `devtools` package:
-
 ```r
-# install from source available on GitHub:
-# devtools::install_github("soumikp/2026_fedGee")
+# install.packages("remotes")
+remotes::install_github("soumikp/2026_fedGee")
 ```
 
 ## Features
-- **Privacy-Preserving**: Only summary-level matrices (e.g., Bread and Score matrices) are aggregated at the server.
-- **Small-Sample Corrections**: Includes `KC` (Kauermann-Carroll) and `MD` (Mancl-DeRouen) corrections.
-- **Cluster/Patient-Level Adjustments**: Allows sandwich variance estimation at the site-level or patient-level.
 
-## Toy Example
+- **Centralized** (`fedgee()`): a server sums the site summaries. The
+  estimate equals pooled GEE.
+- **Decentralized** (`decentralized_fedgee()`): no server. Sites average with
+  neighbours over a gossip network (hub, ring, VISN-style or complete; see
+  `build_weight_matrix()`).
+- **Small-sample corrections in score space**: Kauermann–Carroll (`KC`,
+  default), Mancl–DeRouen (`MD`) and Fay–Graubard (`FG`). All are computed
+  from the site summaries alone.
+- **Bell–McCaffrey degrees of freedom** (`df = "bm"`, default). They are
+  computed from the site breads and adapt to unequal site sizes. KC with
+  Bell–McCaffrey df equals CR2 with Satterthwaite df (clubSandwich) for
+  linear models.
+- **One fit, every variant**: `summary(fit, correction = "MD", df = "K-1")`
+  switches variants without refitting.
 
-Here is a small example using a known built-in R dataset (`ChickWeight`), simulating a scenario where longitudinal patient records are distributed across multiple "sites". 
+## Example
 
 ```r
 library(FedGEE)
 
-# 1. Prepare data using the built-in 'ChickWeight' dataset
-# We'll split the data into 3 arbitrary "sites" based on the Chick ID modulo 3
 data(ChickWeight)
-df <- ChickWeight
+cw <- as.data.frame(ChickWeight)
+cw$site <- as.integer(cw$Chick) %% 12   # 12 mock sites
+data_list <- split(cw, cw$site)
 
-# Create a mock 'site' variable
-df$site <- paste0("Site_", as.numeric(df$Chick) %% 3 + 1)
+# Centralized
+fit <- fedgee(data_list, weight ~ Time + Diet,
+              family_obj = gaussian(), id_col = "Chick", verbose = FALSE)
+fit                                      # KC + Bell-McCaffrey df
+summary(fit, correction = "MD", df = "K-1")
+confint(fit)
 
-# Split the dataframe into a list of dataframes by site
-data_list <- split(df, df$site)
-
-# 2. Fit the Federated GEE Model
-# We model weight ~ Time + Diet across our dummy sites
-fed_model <- fedgee(
-  data_list      = data_list,
-  main_formula   = weight ~ Time + Diet,
-  family_obj     = gaussian(link = "identity"),
-  corstr         = "exchangeable",     # Working correlation structure
-  id_col         = "Chick",            # Column indicating clusters
-  sandwich_level = "site",             # Level for sandwich variance
-  correction     = "KC",               # Kauermann-Carroll small-sample correction
-  verbose        = FALSE
-)
-
-# 3. Fit the Pooled GEE Model for Comparison
-# This requires the geepack package and the pooled dataset
-library(geepack)
-pooled_model <- geeglm(
-  weight ~ Time + Diet, 
-  data = df[order(df$Chick), ], 
-  id = Chick, 
-  family = gaussian(link = "identity"), 
-  corstr = "exchangeable"
-)
-
-# 4. Compare via Forest Plot
-library(dplyr)
-library(ggplot2)
-
-fed_df <- data.frame(
-  term = names(fed_model$coefficients),
-  estimate = fed_model$coefficients,
-  std.error = fed_model$se,
-  model = "FedGEE"
-)
-
-pooled_sum <- summary(pooled_model)$coefficients
-pooled_df <- data.frame(
-  term = rownames(pooled_sum),
-  estimate = pooled_sum$Estimate,
-  std.error = pooled_sum$Std.err,
-  model = "Pooled GEE"
-)
-
-plot_data <- bind_rows(fed_df, pooled_df) |>
-  mutate(
-    conf.low = estimate - 1.96 * std.error,
-    conf.high = estimate + 1.96 * std.error
-  )
-
-ggplot(plot_data, aes(x = estimate, y = term, color = model)) +
-  geom_point(position = position_dodge(width = 0.5), size = 2) +
-  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), 
-                position = position_dodge(width = 0.5), width = 0.2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-  theme_minimal() +
-  labs(
-    title = "Comparison of FedGEE vs Pooled GEE",
-    x = "Estimate (95% CI)",
-    y = "Coefficient",
-    color = "Model"
-  )
+# Decentralized over a ring network
+dfit <- decentralized_fedgee(data_list, weight ~ Time + Diet,
+                             family_obj = gaussian(), id_col = "Chick",
+                             structure = "ring", sandwich_level = "site",
+                             correction = "KC",
+                             L_beta = 150, L_S = 150, L_B = 150,
+                             tol = 1e-6, verbose = FALSE)
+dfit
 ```
 
-![FedGEE vs Pooled GEE Forest Plot](fedgee_comparison.png)
+## Notes
+
+- The site-level sandwich has rank $\min(p, K - 1)$. With $K$ sites, keep
+  $p$ well below $K$. `fedgee()` warns when the sandwich is singular.
+- Each site estimates its own working correlation. The estimate equals
+  pooled GEE exactly when every site uses the same correlation, which always
+  holds for `corstr = "independence"`.
+- Decentralized: disagreement between sites shrinks like $\rho^L$
+  (`build_weight_matrix(...)$rho`). Too few rounds hurt the standard errors
+  before they hurt the estimate.

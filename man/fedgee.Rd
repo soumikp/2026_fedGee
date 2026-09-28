@@ -10,37 +10,106 @@ fedgee(
   family_obj = binomial(link = "logit"),
   corstr = "independence",
   id_col = "pat_id",
-  sandwich_level = "site",
-  correction = "KC",
+  sandwich_level = c("site", "patient"),
+  correction = c("KC", "MD", "FG", "none"),
+  df = c("bm", "K-1", "K-p", "z"),
+  fg_df = FALSE,
   n_iter = 50,
   tol = 1e-08,
   verbose = TRUE
 )
 }
 \arguments{
-\item{data_list}{A list of data frames, one per site.}
+\item{data_list}{A list of data frames, one per site. Factor columns must
+have the same levels at every site.}
 
-\item{main_formula}{The model formula.}
+\item{main_formula}{Model formula.}
 
-\item{family_obj}{A family object (e.g., \code{binomial()}).}
+\item{family_obj}{A family object, e.g. \code{binomial()}.}
 
-\item{corstr}{Working correlation structure (e.g., "independence", "exchangeable").}
+\item{corstr}{Working correlation: \code{"independence"},
+\code{"exchangeable"}, \code{"ar1"} or \code{"unstructured"}. The
+correlation parameter is estimated locally at each site.}
 
-\item{id_col}{Character string naming the cluster/patient ID column.}
+\item{id_col}{Name of the within-site cluster (patient) ID column.}
 
-\item{sandwich_level}{Level to compute sandwich variance ("site" or "patient").}
+\item{sandwich_level}{\code{"site"} (default; one cluster per site) or
+\code{"patient"} (patients independent within and across sites).}
 
-\item{correction}{Small-sample variance correction ("none", "KC", or "MD").}
+\item{correction}{Reported correction: \code{"KC"} (default),
+\code{"MD"}, \code{"FG"} or \code{"none"}.}
 
-\item{n_iter}{Maximum number of iterations.}
+\item{df}{Reported reference distribution: \code{"bm"} (default),
+\code{"K-1"}, \code{"K-p"} or \code{"z"}.}
 
-\item{tol}{Convergence tolerance.}
+\item{fg_df}{Logical; also compute Fay--Graubard's own df via the
+\pkg{saws} package (slow for large \eqn{p}). Stored in
+\code{$variances$site$FG$df_fg}.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints fit progress.}
+\item{n_iter}{Maximum Newton--Raphson iterations.}
+
+\item{tol}{Convergence tolerance on the update norm.}
+
+\item{verbose}{Logical; print iteration progress.}
 }
 \value{
-An object of class \code{FedGEE}.
+An object of class \code{FedGEE}: \code{coefficients},
+  \code{vcov}, \code{se}, \code{df} (per coefficient) for the selected
+  variant; \code{variances} holding every variant; \code{diagnostics}
+  (site-size CV, maximum leverage, meat rank, clipping counts); and fit
+  metadata.
 }
 \description{
-Fits a federated generalized estimating equation model with small-sample variance corrections.
+Fits a GEE across sites that share only \eqn{p \times p} summaries
+(bread and score) with a central server. The point estimate equals pooled
+GEE when all sites use a common working correlation (always true for
+\code{corstr = "independence"}). One fit computes every small-sample
+variance; \code{correction} and \code{df} only choose which one is
+reported, and \code{\link{summary.FedGEE}} can show any other without
+refitting.
+}
+\section{Small-sample corrections (site level)}{
+
+\describe{
+  \item{\code{"none"}}{Uncorrected sandwich, one outer product per site.}
+  \item{\code{"KC"}}{Kauermann--Carroll: site score multiplied by
+    \eqn{B^{1/2}(I - G_i)^{-1/2}B^{-1/2}}, \eqn{G_i = B^{-1/2}B_iB^{-1/2}}.
+    Unbiased under the working model; the recommended default.}
+  \item{\code{"MD"}}{Mancl--DeRouen: power \eqn{-1}; conservative.}
+  \item{\code{"FG"}}{Fay--Graubard: diagonal leverage correction with
+    bound 0.75.}
+}
+}
+
+\section{Degrees of freedom}{
+
+\code{"bm"} is the Bell--McCaffrey (Satterthwaite) df computed in score
+space from the site breads only; it adapts to unequal site sizes and is
+the recommended pairing with KC. \code{"K-1"} and \code{"K-p"} are fixed
+counts; \code{"z"} uses the normal. The patient-level sandwich always uses
+\eqn{N - p} (or \code{"z"}).
+}
+
+\section{Rank limit}{
+
+The site-level meat is a sum of \eqn{K} outer products of scores that sum
+to zero, so its rank is \eqn{\min(p, K - 1)}. With \eqn{K \le p} the
+sandwich is singular and a warning is issued.
+}
+
+\examples{
+data(ChickWeight)
+cw <- ChickWeight
+cw$site <- as.integer(cw$Chick) \%\% 12
+fit <- fedgee(split(cw, cw$site), weight ~ Time + Diet,
+  family_obj = gaussian(), id_col = "Chick", verbose = FALSE
+)
+fit
+summary(fit, correction = "MD", df = "K-1")
+}
+\references{
+Kauermann G, Carroll RJ (2001). JASA 96:1387--1396.
+Mancl LA, DeRouen TA (2001). Biometrics 57:126--134.
+Fay MP, Graubard BI (2001). Biometrics 57:1198--1206.
+Bell RM, McCaffrey DF (2002). Survey Methodology 28:169--181.
 }

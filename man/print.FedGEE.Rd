@@ -4,12 +4,12 @@
 \alias{print.FedGEE}
 \title{Print Method for Federated GEE}
 \usage{
-print.FedGEE(x, ...)
+\method{print}{FedGEE}(x, ...)
 }
 \arguments{
-\item{x}{An object of class \code{FedGEE}}
+\item{x}{An object of class \code{FedGEE}.}
 
-\item{...}{Additional arguments}
+\item{...}{Passed to \code{\link{summary.FedGEE}}.}
 }
 \description{
 Print Method for Federated GEE
