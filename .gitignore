@@ -57,18 +57,19 @@ rsconnect/
 ehthumbs.db
 Thumbs.db
 
-# Simulation results and logs
-inst/simulations/sim_results/
-inst/simulations/sim_figures/
-inst/simulations/log/
-inst/simulations/archive/
-inst/simulations/*_files/
-inst/simulations/*.html
-inst/simulations/*.pdf
-inst/simulations/*.eps
-inst/simulations/*.png
-inst/simulations/*.csv
-simulations/sim_results/
-simulations/sim_figures/
-simulations/log/
-simulations/archive/
+# --- inst/: only what reproduces the Stat Med manuscript (reorganized 2026-09-29) ---
+# Earlier work lives in inst/_archive/ locally and is not part of the repository.
+inst/_archive/
+# Raw simulation output and cluster logs (large; regenerable; see inst/simulations/*/README.md)
+inst/simulations/*/output/
+inst/simulations/*/logs/
+inst/simulations/decentralized/results/dec_table_log.txt
+*.out
+*.err
+# LaTeX build files
+inst/manuscript/*.aux
+inst/manuscript/*.log
+inst/manuscript/*.bbl
+inst/manuscript/*.blg
+inst/manuscript/*.toc
+inst/manuscript/*.synctex.gz

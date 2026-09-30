@@ -1,0 +1,1251 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{mathtools,amssymb,amsthm,bm}
+\usepackage{booktabs,longtable}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{setspace}
+
+\onehalfspacing
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\thesection}{\Alph{section}}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{condition}{Condition}[section]
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\numberwithin{equation}{section}
+
+\newcommand{\T}{\mathsf{T}}
+\newcommand{\trans}{\mathsf{T}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bbeta}{\boldsymbol{\beta}}
+\newcommand{\bmu}{\bm{\mu}}
+\newcommand{\bzero}{\mathbf 0}
+\newcommand{\bI}{\mathbf I}
+\newcommand{\Scal}{\mathcal S}
+\newcommand{\Bcal}{\mathcal B}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+
+\title{Supporting Information for ``Fed-GEE: Federated Generalized Estimating
+Equations for Multisite Health Data, with an Application to Veterans' Health''}
+\author{Feier Chang and Soumik Purkayastha}
+\date{}
+
+\begin{document}
+\maketitle
+
+\noindent Sections are the Web Appendices cited in the main text. Web Tables are
+numbered S1, S2, and so on.
+
+\tableofcontents
+\clearpage
+\section{Large-sample theory}
+\label{app:A}
+
+Let
+\[
+\Scal_K(\bbeta)=\sum_{i=1}^K\Scal_{iK}(\bbeta),
+\qquad
+\dot\Scal_K(\bbeta)=\frac{\partial\Scal_K(\bbeta)}
+{\partial\bbeta^{\T}}.
+\]
+
+\begin{theorem}[Consistency and asymptotic normality]
+Suppose (i) sites are independent and
+$E\{\Scal_{iK}(\bbeta_0)\}=0$; (ii) for a deterministic continuous function
+$s$,
+\[
+\sup_{\bbeta\in\Theta}
+\norm{K^{-1}\Scal_K(\bbeta)-s(\bbeta)}\overset{p}{\longrightarrow}0,
+\]
+and $\bbeta_0$ is a separated zero of $s$; (iii), on a neighborhood of
+$\bbeta_0$,
+\[
+\sup_{\bbeta}
+\norm{-K^{-1}\dot\Scal_K(\bbeta)-B(\bbeta)}
+\overset{p}{\longrightarrow}0,
+\]
+where $B$ is continuous and $B_0=B(\bbeta_0)$ is nonsingular; and (iv)
+\[
+K^{-1/2}\Scal_K(\bbeta_0)\overset{d}{\longrightarrow}N(0,M_0).
+\]
+If $\widehat\bbeta$ is the selected root of $\Scal_K$, then
+$\widehat\bbeta\overset{p}{\longrightarrow}\bbeta_0$ and
+\[
+\sqrt K(\widehat\bbeta-\bbeta_0)
+\overset{d}{\longrightarrow}
+N\{0,B_0^{-1}M_0B_0^{-\T}\}.
+\]
+\end{theorem}
+
+\begin{proof}
+Uniform convergence and separated identification imply consistency. The
+integral Taylor identity gives
+\[
+0=\Scal_K(\bbeta_0)+
+\left\{\int_0^1\dot\Scal_K
+(\bbeta_0+t(\widehat\bbeta-\bbeta_0))\,dt\right\}
+(\widehat\bbeta-\bbeta_0).
+\]
+The negative normalized integral Jacobian converges in probability to $B_0$.
+Premultiplication by its inverse followed by Slutsky's theorem gives the stated
+limit.
+\end{proof}
+
+
+\section{Exactness of the half-power}
+\label{app:B}
+
+All expectations in this section are conditional on the design.
+
+\begin{theorem}[Exact score-space correction]
+Suppose
+\[
+\Scal_i(\bbeta)=U_i-B_i(\bbeta-\bbeta_0),
+\]
+where $B_i$ is fixed and positive semidefinite, the $U_i$ are independent,
+$E(U_i)=0$, and $\operatorname{Var}(U_i)=\tau B_i$ for a common
+$\tau>0$. Let $B=\sum_iB_i\succ0$ and assume $B-B_i\succ0$ for every
+$i$. Define
+\[
+G_i=B^{-1/2}B_iB^{-1/2},\qquad
+z_i=B^{-1/2}\Scal_i(\widehat\bbeta),\qquad
+A_i=(\bI-G_i)^{-1/2}.
+\]
+Then
+\[
+E(z_iz_i^{\T})=\tau G_i(\bI-G_i)
+\]
+and
+\[
+\widehat V_{\mathrm{KC}}=
+B^{-1/2}\left\{\sum_iA_iz_iz_i^{\T}A_i\right\}B^{-1/2}
+\]
+satisfies
+\[
+E(\widehat V_{\mathrm{KC}})=\tau B^{-1}
+=\operatorname{Var}(\widehat\bbeta).
+\]
+\end{theorem}
+
+\begin{proof}
+The estimating equation gives
+\[
+\widehat\bbeta-\bbeta_0=B^{-1}\sum_jU_j.
+\]
+Writing $H_i=B_iB^{-1}$,
+\[
+\Scal_i(\widehat\bbeta)
+=(\bI-H_i)U_i-H_i\sum_{j\ne i}U_j.
+\]
+Independence and the covariance condition therefore imply
+\begin{align*}
+E\{\Scal_i(\widehat\bbeta)\Scal_i(\widehat\bbeta)^{\T}\}
+={}&(\bI-H_i)(\tau B_i)(\bI-H_i)^{\T}\\
+&+H_i\{\tau(B-B_i)\}H_i^{\T}.
+\end{align*}
+Conjugation by $B^{-1/2}$ yields
+\[
+E(z_iz_i^{\T})=\tau G_i(\bI-G_i).
+\]
+Because $A_i$ is a matrix function of $G_i$, the two commute, and
+\[
+A_iE(z_iz_i^{\T})A_i=\tau G_i.
+\]
+Finally, $\sum_iG_i=\bI$, so
+\[
+E(\widehat V_{\mathrm{KC}})
+=B^{-1/2}\left(\tau\sum_iG_i\right)B^{-1/2}
+=\tau B^{-1}.
+\]
+The same value follows directly for the variance of
+$B^{-1}\sum_iU_i$.
+\end{proof}
+
+\subsection{Uniqueness of the half-power}
+
+For $A_i(\alpha)=(\bI-G_i)^{-\alpha}$, the expected adjusted
+information-standardized
+contribution is
+\[
+\tau G_i(\bI-G_i)^{1-2\alpha}.
+\]
+Requiring this to equal $\tau G_i$ for every admissible $G_i$ forces
+$1-2\alpha=0$. Thus $\alpha=1/2$ is unique within this family. The
+full-power choice $\alpha=1$ is larger in positive-semidefinite order under
+the affine working model and is consequently expected to be conservative.
+
+\subsection{Raw-score representation}
+
+The equivalent adjusted raw score is
+\[
+\widetilde\Scal_i=
+B^{1/2}(\bI-G_i)^{-1/2}B^{-1/2}
+\Scal_i(\widehat\bbeta),
+\]
+and
+\[
+\widehat V_{\mathrm{KC}}=
+B^{-1}\left(\sum_i\widetilde\Scal_i
+\widetilde\Scal_i^{\T}\right)B^{-1}.
+\]
+This representation shows why the correction cannot generally be implemented
+by multiplying a raw score directly by $(\bI-G_i)^{-1/2}$.
+
+
+\section{Invariance to the matrix square root}
+\label{app:C}
+
+All three corrections in the main text use the symmetric square root
+$\widehat\Bcal^{-1/2}$. Any other factor gives the same variance.
+
+\begin{proposition}[Invariance to the choice of matrix factor]
+\label{prop:invariance}
+Let $B\succ0$ and let $R$ be any $p\times p$ matrix with $RR^{\T}=B^{-1}$. Define
+\[
+G_i^R=R^{\T}B_iR,\qquad z_i^R=R^{\T}\Scal_i(\widehat\bbeta),\qquad
+A_i^R(\alpha)=(\bI-G_i^R)^{-\alpha}.
+\]
+Then, for every $\alpha>0$,
+\[
+R\Big\{\sum_{i=1}^KA_i^R(\alpha)z_i^Rz_i^{R\T}A_i^R(\alpha)^{\T}\Big\}R^{\T}
+=B^{-1/2}\Big\{\sum_{i=1}^KA_i(\alpha)z_iz_i^{\T}A_i(\alpha)\Big\}B^{-1/2}.
+\]
+\end{proposition}
+
+\begin{proof}
+Let $Q=B^{1/2}R$. Then $QQ^{\T}=B^{1/2}B^{-1}B^{1/2}=\bI$, so $Q$ is orthogonal
+and $R=B^{-1/2}Q$. Hence $G_i^R=Q^{\T}G_iQ$ and $z_i^R=Q^{\T}z_i$. Because $Q$ is
+orthogonal, $(\bI-Q^{\T}G_iQ)^{-\alpha}=Q^{\T}(\bI-G_i)^{-\alpha}Q$. Substituting,
+each term equals
+$B^{-1/2}QQ^{\T}A_iQQ^{\T}z_iz_i^{\T}QQ^{\T}A_iQQ^{\T}B^{-1/2}
+=B^{-1/2}A_iz_iz_i^{\T}A_iB^{-1/2}$.
+\end{proof}
+
+A Cholesky factor of $B^{-1}$ may therefore be used in computation. The same
+argument shows that the degrees of freedom of Web Appendix~F do not depend on the
+factor, because they depend on the design only through the corrected raw-score
+operators $T_i$, which are factor invariant.
+
+\section{Large-$K$ equivalence of the corrections}
+\label{app:D}
+
+\begin{proposition}[Large-$K$ equivalence of the corrections]
+\label{prop:largeK}
+Let $B_K=\widehat\Bcal$, $q_K=\max_i\norm{G_i}$, and $z_i=B_K^{-1/2}\widehat\Scal_i$.
+Suppose $q_K=O_p(K^{-1})$, $\sum_i\norm{z_i}^2=O_p(1)$, and
+$\norm{B_K^{-1/2}}=O_p(K^{-1/2})$. Then
+$\norm{\widehat V_{\mathrm{KC}}-\widehat V_{\mathrm{S}}}=O_p(K^{-2})$, while
+$\norm{\widehat V_{\mathrm{S}}}=O_p(K^{-1})$.
+\end{proposition}
+
+The condition $q_K=O_p(K^{-1})$ says that no site holds more than a vanishing share
+of the information.
+
+\begin{proof}
+Let
+\[
+A_i(1/2)
+=
+(\bI_p-G_i)^{-1/2},
+\qquad
+q_K=\max_{1\le i\le K}\norm{G_i}.
+\]
+The scalar expansion
+\[
+(1-x)^{-1/2}
+=
+\sum_{m=0}^{\infty}c_mx^m,
+\qquad
+c_m=\frac{\binom{2m}{m}}{4^m},
+\]
+induces a convergent matrix power series whenever \(\norm{G_i}<1\).
+Because \(q_K=O_p(K^{-1})\), with probability tending to one
+\(q_K\le1/2\). On this event,
+\[
+d_K
+:=
+\max_i\norm{A_i(1/2)-\bI_p}
+\le
+\sum_{m=1}^{\infty}c_mq_K^m
+=
+(1-q_K)^{-1/2}-1
+\le
+Cq_K
+\]
+for a finite constant \(C\). Hence
+\[
+d_K=O_p(K^{-1}),
+\qquad
+\max_i\norm{A_i(1/2)}=O_p(1).
+\]
+
+Using the identity
+\begin{align*}
+&A_i(1/2)z_i z_i^{\trans}A_i(1/2)-z_i z_i^{\trans}\\
+&\qquad=
+\{A_i(1/2)-\bI_p\}z_i z_i^{\trans}A_i(1/2)
++
+z_i z_i^{\trans}\{A_i(1/2)-\bI_p\},
+\end{align*}
+submultiplicativity and
+\(\norm{z_i z_i^{\trans}}=\norm{z_i}^2\) give
+\begin{align*}
+&\left\|
+\sum_{i=1}^K
+\left(
+A_i(1/2)z_i z_i^{\trans}A_i(1/2)-z_i z_i^{\trans}
+\right)
+\right\|\\
+&\qquad\le
+ d_K\left\{\max_i\norm{A_i(1/2)}+1\right\}
+\sum_{i=1}^K\norm{z_i}^2
+=
+O_p(K^{-1}).
+\end{align*}
+Therefore, using \(\norm{B_K^{-1/2}}=O_p(K^{-1/2})\),
+\[
+\left\|
+\widehat V_{\mathrm{KC}}-\widehat V_{\mathrm{S}}
+\right\|
+\le
+\norm{B_K^{-1/2}}^2 O_p(K^{-1})
+=
+O_p(K^{-2}).
+\]
+Moreover,
+\[
+\norm{\widehat V_{\mathrm{S}}}
+\le
+\norm{B_K^{-1/2}}^2
+\sum_{i=1}^K\norm{z_i}^2
+=
+O_p(K^{-1}).
+\]
+Thus the half-power correction is second order relative to the
+\(K^{-1}\) scale of the conventional sandwich covariance and does not
+alter its first-order large-\(K\) limit.
+\end{proof}
+
+\begin{remark}
+The same argument applies to MD, with the coefficients $c_m$ replaced by 1, and
+to FG, whose diagonal factors satisfy $\norm{F_i-\bI}=O_p(K^{-1})$ when the
+condition number of $K^{-1}B_K$ is bounded. All corrections therefore share the
+first-order limit of the uncorrected sandwich.
+\end{remark}
+
+\section{Rank of the fitted meat}
+\label{app:E}
+
+For the unadjusted fitted score matrix
+$S=[\Scal_1(\widehat\bbeta),\ldots,\Scal_K(\widehat\bbeta)]$, the
+estimating equation gives $S\mathbf 1_K=0$. Consequently,
+\[
+\operatorname{rank}(SS^{\T})\le\min(p,K-1).
+\]
+Site-specific invertible adjustments need not preserve the zero-sum relation.
+The universal adjusted bound is instead
+\[
+\operatorname{rank}\left(\sum_iA_i\Scal_i\Scal_i^{\T}A_i^{\T}\right)
+\le\min(p,K).
+\]
+Thus an adjusted meat is necessarily singular when $K<p$, but it can be full
+rank when $K=p$. This distinction does not rescue routine Wald inference at
+$K\le p$, where the uncorrected score covariance and residual degrees of
+freedom are inadequate.
+
+
+\section{Fay--Graubard and Bell--McCaffrey in score space}
+\label{app:F}
+
+\subsection{Fay--Graubard in score space}
+
+\citet{fay2001small} rescale each cluster's contribution to the meat by a
+diagonal factor built from the cluster's share of the information. At the site
+level this factor is
+\[
+F_i=\operatorname{diag}\Big[\big\{1-\min\big(b,(B_iB^{-1})_{kk}\big)\big\}^{-1/2}\Big]_{k=1}^p,
+\]
+with $b=0.75$ by default. The corrected variance is
+$B^{-1}\big(\sum_iF_i\widehat\Scal_i\widehat\Scal_i^{\T}F_i\big)B^{-1}$. It uses
+only the site scores and information matrices. Our implementation agreed with the
+\texttt{saws} package (method \texttt{d5}) to machine precision when \texttt{saws}
+was given the same site scores and information matrices.
+
+\subsection{Bell--McCaffrey degrees of freedom in score space}
+
+Fix a coefficient $j$ and a correction with raw-score operators $T_i$ (main
+text, equation~(9)). Let $a_i=T_i^{\T}B^{-1}e_j$. The corrected variance of
+$\widehat\beta_j$ is
+\[
+v_j=\sum_{i=1}^K(a_i^{\T}\widehat\Scal_i)^2.
+\]
+Work under the affine model of Theorem~1 of the main text, with
+$U_k=\tau^{1/2}B_k^{1/2}\varepsilon_k$ and independent standard normal
+$\varepsilon_k$. Then $\widehat\Scal_i=U_i-B_iB^{-1}\sum_kU_k$, so
+\[
+a_i^{\T}\widehat\Scal_i=\sum_{k=1}^Kw_{ik}^{\T}U_k,
+\qquad
+w_{ik}=\mathbf 1\{i=k\}a_i-B^{-1}B_ia_i.
+\]
+Hence $v_j=\tau\,\varepsilon^{\T}Q\varepsilon$ for a positive semidefinite matrix
+$Q=\sum_ir_ir_i^{\T}$, where $r_i$ stacks the blocks $B_k^{1/2}w_{ik}$. The nonzero
+eigenvalues of $Q$ equal those of the $K\times K$ matrix $C$ with entries
+$C_{il}=r_i^{\T}r_l=\sum_kw_{ik}^{\T}B_kw_{lk}$. Expanding and using $\sum_kB_k=B$,
+\[
+C_{il}=\mathbf 1\{i=l\}\,a_i^{\T}B_ia_i-(B_ia_i)^{\T}B^{-1}(B_la_l).
+\]
+For a Gaussian quadratic form, $E(v_j)=\tau\operatorname{tr}(C)$ and
+$\Var(v_j)=2\tau^2\operatorname{tr}(C^2)$. Matching these two moments to a scaled
+$\chi^2_\nu$ distribution \citep{satterthwaite1946approximate,bell2002bias} gives
+\[
+\nu_j^{\mathrm{BM}}=\frac{\{\operatorname{tr}(C)\}^2}{\operatorname{tr}(C^2)}.
+\]
+
+\emph{Equal sites.} If $B_i=B/K$ and $T_i=T$ for all $i$, then $a_i=a$ and
+$C=c(\bI_K-K^{-1}\mathbf 1_K\mathbf 1_K^{\T})$ with $c=a^{\T}Ba/K$. Then
+$\operatorname{tr}(C)=c(K-1)$ and $\operatorname{tr}(C^2)=c^2(K-1)$, so
+$\nu_j^{\mathrm{BM}}=K-1$.
+
+\emph{Relation to CR2.} With working independence and an identity link, the site
+information matrices are $X_i^{\T}X_i$, the KC operator equals the CR2 adjustment,
+and $\nu_j^{\mathrm{BM}}$ equals the Satterthwaite degrees of freedom of
+\citet{pustejovsky2018small}. We confirmed agreement to four decimal places
+against the \texttt{clubSandwich} package in simulated data. In the VHA
+application, with a logistic link, the degrees of freedom agreed to three decimal
+places and the standard errors to within 0.5\%.
+
+\emph{Monte Carlo check.} Under the working model with 20{,}000 simulated draws,
+the empirical mean and variance of $v_j$ matched $\tau\operatorname{tr}(C)$ and
+$2\tau^2\operatorname{tr}(C^2)$.
+
+\section{One-step Fed-GEE}
+\label{app:G}
+
+When communication rounds are costly, a common initial estimator
+$\widehat\bbeta^{(0)}$ can be updated once using
+\begin{equation}
+\widehat\bbeta^{(1)}=\widehat\bbeta^{(0)}+
+\Bcal_K\{\widehat\bbeta^{(0)}\}^{-1}
+\Scal_K\{\widehat\bbeta^{(0)}\}.
+\label{eq:onestep}
+\end{equation}
+Each site sends one score and one information matrix evaluated at the common
+initializer.
+
+\begin{assumption}[Initial rate]
+The common initializer satisfies
+\[
+\widehat\bbeta^{(0)}-\bbeta_0=o_p(K^{-1/4}).
+\]
+\end{assumption}
+
+\begin{assumption}[Local smoothness]
+In a neighborhood of $\bbeta_0$,
+\[
+\norm{B_i(\bbeta)-B_i(\bbeta')}
+\le \ell_i\norm{\bbeta-\bbeta'},
+\qquad K^{-1}\sum_i\ell_i=O_p(1),
+\]
+and the normalized difference between $B_K(\bbeta)$ and the negative score
+derivative is $O_p(K^{-1/2})$ uniformly in that neighborhood.
+\end{assumption}
+
+\begin{theorem}[One-step Fed-GEE]
+Under the centralized conditions and the two preceding assumptions,
+\[
+\sqrt K(\widehat\bbeta^{(1)}-\bbeta_0)
+\overset{d}{\longrightarrow}
+N\{0,B_0^{-1}M_0B_0^{-\T}\}.
+\]
+Thus the one-step and fully converged estimators have the same first-order
+limit.
+\end{theorem}
+
+\begin{proof}
+Expand $\Scal_K\{\widehat\bbeta^{(0)}\}$ around $\bbeta_0$ using an
+integral Jacobian. After substituting into Equation~\eqref{eq:onestep}, the
+linear term cancels the initial error. The bread Lipschitz condition bounds the
+remaining curvature term by
+\[
+O_p(1)\sqrt K
+\norm{\widehat\bbeta^{(0)}-\bbeta_0}^2=o_p(1).
+\]
+The normalized bread--score-derivative discrepancy contributes
+$O_p(1)\norm{\widehat\bbeta^{(0)}-\bbeta_0}=o_p(1)$. Hence
+\[
+\{K^{-1}\Bcal_K(\widehat\bbeta^{(0)})\}
+\sqrt K(\widehat\bbeta^{(1)}-\bbeta_0)
+=K^{-1/2}\Scal_K(\bbeta_0)+o_p(1).
+\]
+The bread converges to $B_0$, and the site-level central limit theorem and
+Slutsky's theorem give the result.
+\end{proof}
+
+The rate condition is substantive. A one-shot update is not recommended when a
+common $o_p(K^{-1/4})$ initializer cannot be justified.
+
+
+\section{Decentralized Fed-GEE}
+\label{app:H}
+% ============================================================
+
+\subsection{Communication Conditions}
+
+In the decentralized architecture, each site exchanges low-dimensional
+quantities only with its network neighbors and approximates global summaries
+through average consensus. The centralized regularity conditions stated in
+the main manuscript continue to govern the statistical model; the conditions
+below concern communication and numerical approximation.
+
+\begin{condition}[Communication network]
+\label{cond:supp_network}
+For each \(K\), let
+\[
+W_K=(w_{ih})\in\R^{K\times K}
+\]
+denote the mixing matrix, where \(i\) and \(h\) index sites. The entries of
+\(W_K\) are nonnegative, and \(W_K\) is symmetric and doubly stochastic:
+\[
+W_K\mathbf 1_K=\mathbf 1_K,
+\qquad
+\mathbf 1_K^{\trans}W_K=\mathbf 1_K^{\trans}.
+\]
+The corresponding undirected communication graph is connected, with
+\[
+w_{ih}=0
+\]
+whenever sites \(i\) and \(h\) are not neighbors and \(i\ne h\). Define
+\[
+J_K=\frac1K\mathbf 1_K\mathbf 1_K^{\trans}.
+\]
+Assume the mixing process is aperiodic, for example through positive diagonal
+weights, so that
+\[
+\rho_K=\norm{W_K-J_K}_2<1.
+\]
+For a site-level quantity \(Q\), define
+\begin{equation}
+\delta_{Q,K}
+=
+\norm{W_K^{L_{Q,K}}-J_K}_{\infty},
+\label{eq:supp_consensus_error}
+\end{equation}
+where \(L_{Q,K}\) is the number of consensus rounds applied to \(Q\).
+\end{condition}
+
+\begin{condition}[Site-level smoothness and boundedness]
+\label{cond:supp_site_smoothness}
+For all \(\bbeta_1,\bbeta_2\in\Theta\),
+\[
+\norm{S_h(\bbeta_1)-S_h(\bbeta_2)}_2
+\le
+\ell_{S,h,K}\norm{\bbeta_1-\bbeta_2}_2,
+\]
+where
+\[
+\frac1K\sum_{h=1}^K\ell_{S,h,K}=O_p(1).
+\]
+Similarly,
+\[
+\norm{B_h(\bbeta_1)-B_h(\bbeta_2)}_2
+\le
+\ell_{B,h,K}\norm{\bbeta_1-\bbeta_2}_2,
+\]
+where
+\[
+\frac1K\sum_{h=1}^K\ell_{B,h,K}=O_p(1).
+\]
+In addition,
+\[
+\max_h\sup_{\bbeta\in\Theta}\norm{S_h(\bbeta)}_2=O_p(1),
+\qquad
+\max_h\sup_{\bbeta\in\Theta}\norm{B_h(\bbeta)}_2=O_p(1).
+\]
+Let \(\bbeta_h^\star\) denote the terminal local parameter state at site
+\(h\) immediately before the final parameter-consensus step. Assume
+\[
+\max_h\norm{\bbeta_h^\star}_2=O_p(1).
+\]
+\end{condition}
+
+\begin{condition}[Terminal algorithmic accuracy]
+\label{cond:supp_terminal_accuracy}
+After the final parameter-consensus step, site \(i\) holds
+\begin{equation}
+\widehat{\bbeta}_i
+=
+\sum_{h=1}^K
+\left[W_K^{L_{\beta,K}}\right]_{ih}
+\bbeta_h^\star.
+\label{eq:supp_final_beta_i}
+\end{equation}
+At \(\widehat{\bbeta}_h\), each site recomputes its local score and bread.
+After score and bread consensus, site \(i\) holds
+\[
+\widehat{\bar S}_i
+=
+\sum_{h=1}^K
+\left[W_K^{L_{S,K}}\right]_{ih}
+S_h(\widehat{\bbeta}_h),
+\]
+and
+\[
+\widehat{\bar B}_i
+=
+\sum_{h=1}^K
+\left[W_K^{L_{B,K}}\right]_{ih}
+B_h(\widehat{\bbeta}_h).
+\]
+Assume \(\widehat{\bar B}_i\) is nonsingular with probability tending to
+one. Define the achieved Fisher-scoring residual by
+\begin{equation}
+\eta_K
+=
+\max_i
+\norm{\widehat{\bar B}_i^{-1}\widehat{\bar S}_i}_2.
+\label{eq:supp_terminal_residual}
+\end{equation}
+The algorithm is terminated only when
+\[
+\eta_K\le\epsilon_{\eta,K}.
+\]
+For consistency, require \(\epsilon_{\eta,K}\to0\); for root-\(K\)
+asymptotic equivalence, require
+\[
+\epsilon_{\eta,K}=o(K^{-1/2}).
+\]
+\end{condition}
+
+
+\subsection{Estimator and Consensus Approximation}
+
+Define the decentralized estimator by the network average
+\begin{equation}
+\widehat{\bbeta}_{\mathrm{dec}}
+=
+\frac1K\sum_{i=1}^K\widehat{\bbeta}_i.
+\label{eq:supp_beta_dec}
+\end{equation}
+Because \(W_K\) is doubly stochastic,
+\[
+\widehat{\bbeta}_{\mathrm{dec}}
+=
+\frac1K\sum_{h=1}^K\bbeta_h^\star.
+\]
+Thus the final parameter-consensus step preserves the network average.
+
+\begin{lemma}[Average-consensus approximation]
+\label{lem:supp_average_consensus}
+Let \(Q_1,\ldots,Q_K\) be site-specific vectors or matrices satisfying
+\[
+\max_h\norm{Q_h}=O_p(1).
+\]
+After \(L_{Q,K}\) consensus rounds, let
+\[
+\widehat{\bar Q}_i
+=
+\sum_{h=1}^K
+\left[W_K^{L_{Q,K}}\right]_{ih}Q_h.
+\]
+Then
+\[
+\max_i
+\left\|
+\widehat{\bar Q}_i
+-
+\frac1K\sum_{h=1}^KQ_h
+\right\|
+=
+O_p(\delta_{Q,K}).
+\]
+\end{lemma}
+
+\begin{lemma}[Final parameter agreement]
+\label{lem:supp_parameter_agreement}
+Under Conditions~\ref{cond:supp_network} and
+\ref{cond:supp_site_smoothness},
+\[
+\max_i
+\norm{\widehat{\bbeta}_i-\widehat{\bbeta}_{\mathrm{dec}}}_2
+=
+O_p(\delta_{\beta,K}).
+\]
+\end{lemma}
+
+\begin{lemma}[Approximate global estimating equation]
+\label{lem:supp_approx_score}
+Under Conditions~\ref{cond:supp_network}--\ref{cond:supp_terminal_accuracy},
+\[
+\norm{\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})}_2
+=
+O_p(r_K),
+\]
+where
+\begin{equation}
+r_K
+=
+\delta_{\beta,K}
++
+\delta_{S,K}
++
+\epsilon_{\eta,K}.
+\label{eq:supp_rK}
+\end{equation}
+\end{lemma}
+
+
+\subsection{Large-Sample Properties}
+
+\begin{theorem}[Consistency and asymptotic equivalence]
+\label{thm:supp_dec_consistency}
+Suppose the centralized consistency conditions stated in the main manuscript
+hold, together with Conditions~\ref{cond:supp_network}--
+\ref{cond:supp_terminal_accuracy}. If
+\[
+r_K=o(1),
+\]
+then
+\[
+\widehat{\bbeta}_{\mathrm{dec}}\xrightarrow{p}\bbeta_0.
+\]
+Moreover,
+\[
+\norm{
+\widehat{\bbeta}_{\mathrm{dec}}
+-
+\widehat{\bbeta}_{\mathrm{cen}}
+}_2
+=
+O_p(r_K).
+\]
+\end{theorem}
+
+\begin{theorem}[Asymptotic normality]
+\label{thm:supp_dec_asymptotic}
+Suppose the centralized asymptotic-normality conditions stated in the main
+manuscript hold, together with Conditions~\ref{cond:supp_network}--
+\ref{cond:supp_terminal_accuracy}. If
+\[
+r_K=o(K^{-1/2}),
+\]
+then
+\[
+\sqrt K(\widehat{\bbeta}_{\mathrm{dec}}-\bbeta_0)
+\xrightarrow{d}
+N\left(\bzero,B_0^{-1}M_0B_0^{-\trans}\right).
+\]
+\end{theorem}
+
+\begin{corollary}[Sufficient communication and stopping rates]
+\label{cor:supp_rates}
+Consistency follows if
+\[
+\delta_{\beta,K}\to0,
+\qquad
+\delta_{S,K}\to0,
+\qquad
+\epsilon_{\eta,K}\to0.
+\]
+Root-\(K\) asymptotic equivalence follows if
+\[
+\delta_{\beta,K}
++
+\delta_{S,K}
++
+\epsilon_{\eta,K}
+=
+o(K^{-1/2}).
+\]
+If the final global bread is also reconstructed by consensus, require
+\[
+\delta_{B,K}\to0.
+\]
+For the finite-sample score correction, the fitted leverage matrices must
+remain well defined, with
+\[
+\lambda_{\max}(\widehat G_i)<1
+\]
+in parameter directions in which a negative matrix power is used.
+\end{corollary}
+
+
+\subsection{Consensus Rounds}
+
+For any site-level quantity \(Q_i\), let \(Q_i^{[0]}=Q_i\). At round
+\(\ell\),
+\[
+Q_i^{[\ell+1]}
+=
+\sum_{h=1}^K w_{ih}Q_h^{[\ell]}.
+\]
+Stacking the site states gives
+\[
+Q^{[\ell+1]}=W_KQ^{[\ell]},
+\]
+and after \(L\) rounds,
+\[
+Q^{[L]}=W_K^LQ^{[0]}.
+\]
+For a symmetric mixing matrix,
+\[
+\norm{W_K^L-J_K}_2=\rho_K^L,
+\qquad
+\rho_K=\norm{W_K-J_K}_2<1.
+\]
+Because, for any \(K\times K\) matrix \(C\),
+\[
+\norm{C}_{\infty}\le\sqrt K\norm{C}_2,
+\]
+the row-sum consensus error satisfies
+\begin{equation}
+\norm{W_K^L-J_K}_{\infty}
+\le
+\sqrt K\,\rho_K^L.
+\label{eq:supp_consensus_geometric}
+\end{equation}
+Thus increasing the number of communication rounds reduces the worst-case
+consensus bound geometrically. The realized error at an individual site need
+not decrease monotonically after every single additional round because
+network eigen-components can temporarily cancel or reinforce one another.
+
+
+\subsection{Finite-Sample Score Correction in the Decentralized Architecture}
+
+After final parameter consensus, site \(i\) evaluates
+\[
+S_i(\widehat{\bbeta}_i),
+\qquad
+B_i(\widehat{\bbeta}_i).
+\]
+After \(L\) rounds of bread consensus, let
+\[
+\widehat{\bar B}_i^{(L)}
+=
+\sum_{h=1}^K
+[W_K^L]_{ih}B_h(\widehat{\bbeta}_h),
+\]
+and reconstruct the network-wide bread sum by
+\begin{equation}
+\widehat B_{K,i}^{(L)}
+=
+K\widehat{\bar B}_i^{(L)}.
+\label{eq:supp_dec_global_bread}
+\end{equation}
+Site \(i\) then forms
+\begin{equation}
+\widehat G_i^{(L)}
+=
+\{\widehat B_{K,i}^{(L)}\}^{-1/2}
+B_i(\widehat{\bbeta}_i)
+\{\widehat B_{K,i}^{(L)}\}^{-1/2},
+\label{eq:supp_dec_Gi}
+\end{equation}
+and, for \(a\in\{0,1/2,1\}\),
+\begin{equation}
+\widehat A_i^{(L)}(a)
+=
+(\bI_p-\widehat G_i^{(L)})^{-a}.
+\label{eq:supp_dec_Ai}
+\end{equation}
+The corrected local score is
+\begin{equation}
+S_i^{\mathrm{corr},(L)}(a)
+=
+\{\widehat B_{K,i}^{(L)}\}^{1/2}
+\widehat A_i^{(L)}(a)
+\{\widehat B_{K,i}^{(L)}\}^{-1/2}
+S_i(\widehat{\bbeta}_i),
+\label{eq:supp_dec_corrected_score}
+\end{equation}
+with local corrected meat contribution
+\[
+M_i^{\mathrm{corr},(L)}(a)
+=
+S_i^{\mathrm{corr},(L)}(a)
+S_i^{\mathrm{corr},(L)}(a)^{\trans}.
+\]
+These local meat contributions can be aggregated through an additional
+consensus step.
+
+Let
+\[
+\widehat B_K^{\mathrm{dec}}
+=
+\sum_{h=1}^K B_h(\widehat{\bbeta}_h).
+\]
+By Lemma~\ref{lem:supp_average_consensus},
+\[
+\left\|
+\widehat{\bar B}_i^{(L)}
+-
+\frac1K\widehat B_K^{\mathrm{dec}}
+\right\|
+=
+O_p(\delta_{B,K}^{(L)}),
+\]
+so
+\[
+\norm{
+\widehat B_{K,i}^{(L)}-
+\widehat B_K^{\mathrm{dec}}
+}
+=
+O_p\{K\delta_{B,K}^{(L)}\}.
+\]
+Since the global bread is of order \(K\), this corresponds to a relative
+error of order \(O_p(\delta_{B,K}^{(L)})\). Under continuity of the inverse
+square-root and matrix-power maps, together with eigenvalue gaps away from
+zero, vanishing parameter- and bread-consensus errors imply that
+\(\widehat G_i^{(L)}\), \(\widehat A_i^{(L)}(a)\), and the corrected local
+meat contributions converge to their centralized counterparts.
+
+
+\subsubsection{Reference distributions from additive summaries}
+
+The Bell--McCaffrey degrees of freedom also admit a consensus formulation.
+For a fixed coefficient $j$, write $B=\sum_i B_i$,
+$a_i=T_i^{\trans}B^{-1}e_j$, $d_i=a_i^{\trans}B_i a_i$, and $u_i=B_i a_i$.
+Define the additive summaries
+\[
+D_1=\sum_i d_i,\qquad D_2=\sum_i d_i^2,\qquad
+H=\sum_i u_i u_i^{\trans},\qquad
+R=\sum_i d_i u_i u_i^{\trans}.
+\]
+The kernel in the main text is $C=D-U^{\trans}B^{-1}U$, where
+$D=\operatorname{diag}(d_1,\ldots,d_K)$ and $U$ has columns $u_i$.
+Cyclic invariance of the trace gives
+\begin{align}
+\operatorname{tr}(C)
+&=D_1-\operatorname{tr}(B^{-1}H),\\
+\operatorname{tr}(C^2)
+&=D_2-2\operatorname{tr}(B^{-1}R)
+  +\operatorname{tr}(B^{-1}HB^{-1}H).
+\end{align}
+Thus, no exchange of the full $K\times K$ kernel is required. After information
+consensus, each site constructs its local $d_i,u_i$ using its approximation to
+$B$, and applies consensus to $d_i,d_i^2,u_i u_i^{\trans},d_i u_i u_i^{\trans}$.
+Multiplication by $K$ converts the consensus averages into approximate totals.
+
+For fixed $K$, continuity of these expressions implies convergence to the
+coordinated degrees of freedom as parameter and summary consensus errors
+vanish, provided the information matrix remains nonsingular, the correction
+operators remain well defined, and $\operatorname{tr}(C^2)>0$ at the limit.
+The resulting critical values converge whenever the limiting degrees of
+freedom are positive. This is a computational equivalence result and does not
+establish exact finite-sample coverage. The decentralized simulations in
+Web Appendix I do not evaluate this extension.
+
+\subsection{Proofs for the Decentralized Results}
+
+\subsubsection{Proof of Lemma~\ref{lem:supp_average_consensus}}
+
+\begin{proof}
+For every site \(i\),
+\[
+\widehat{\bar Q}_i
+-
+\frac1K\sum_{h=1}^KQ_h
+=
+\sum_{h=1}^K
+\left\{
+[W_K^{L_{Q,K}}]_{ih}-\frac1K
+\right\}Q_h.
+\]
+By the triangle inequality,
+\[
+\left\|
+\widehat{\bar Q}_i
+-
+\frac1K\sum_{h=1}^KQ_h
+\right\|
+\le
+\norm{W_K^{L_{Q,K}}-J_K}_{\infty}
+\max_h\norm{Q_h}.
+\]
+Taking the maximum over \(i\) gives
+\[
+\max_i
+\left\|
+\widehat{\bar Q}_i
+-
+\frac1K\sum_{h=1}^KQ_h
+\right\|
+=
+O_p(\delta_{Q,K}).
+\]
+\end{proof}
+
+\subsubsection{Proof of Lemma~\ref{lem:supp_parameter_agreement}}
+
+\begin{proof}
+Because \(W_K\) is doubly stochastic,
+\[
+\widehat{\bbeta}_{\mathrm{dec}}
+=
+\frac1K\sum_{h=1}^K\bbeta_h^\star.
+\]
+Applying Lemma~\ref{lem:supp_average_consensus} with
+\(Q_h=\bbeta_h^\star\) gives
+\[
+\max_i
+\norm{\widehat{\bbeta}_i-\widehat{\bbeta}_{\mathrm{dec}}}_2
+=
+O_p(\delta_{\beta,K}).
+\]
+\end{proof}
+
+\subsubsection{Proof of Lemma~\ref{lem:supp_approx_score}}
+
+\begin{proof}
+Fix a site \(i\) and decompose
+\[
+\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})
+=
+R_{S,1}+R_{S,2,i}+R_{S,3,i},
+\]
+where
+\[
+R_{S,1}
+=
+\frac1K\sum_{h=1}^K
+\{S_h(\widehat{\bbeta}_{\mathrm{dec}})-S_h(\widehat{\bbeta}_h)\},
+\]
+\[
+R_{S,2,i}
+=
+\frac1K\sum_{h=1}^KS_h(\widehat{\bbeta}_h)
+-
+\widehat{\bar S}_i,
+\qquad
+R_{S,3,i}=\widehat{\bar S}_i.
+\]
+By site-level score Lipschitz continuity and
+Lemma~\ref{lem:supp_parameter_agreement},
+\[
+\norm{R_{S,1}}_2
+\le
+\left(\frac1K\sum_{h=1}^K\ell_{S,h,K}\right)
+\max_h
+\norm{\widehat{\bbeta}_h-\widehat{\bbeta}_{\mathrm{dec}}}_2
+=
+O_p(\delta_{\beta,K}).
+\]
+Lemma~\ref{lem:supp_average_consensus} applied to
+\(Q_h=S_h(\widehat{\bbeta}_h)\) gives
+\[
+\max_i\norm{R_{S,2,i}}_2
+=
+O_p(\delta_{S,K}).
+\]
+For the final term,
+\[
+\widehat{\bar S}_i
+=
+\widehat{\bar B}_i
+(\widehat{\bar B}_i^{-1}\widehat{\bar S}_i).
+\]
+The bounded-bread condition and convexity of the consensus weights give
+\[
+\max_i\norm{\widehat{\bar B}_i}_2=O_p(1),
+\]
+while the stopping rule gives
+\[
+\max_i
+\norm{\widehat{\bar B}_i^{-1}\widehat{\bar S}_i}_2
+\le
+\epsilon_{\eta,K}.
+\]
+Hence
+\[
+\max_i\norm{R_{S,3,i}}_2
+=
+O_p(\epsilon_{\eta,K}).
+\]
+Combining terms yields
+\[
+\norm{\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})}_2
+=
+O_p(\delta_{\beta,K}+\delta_{S,K}+\epsilon_{\eta,K})
+=
+O_p(r_K).
+\]
+\end{proof}
+
+\subsubsection{Proof of Theorem~\ref{thm:supp_dec_consistency}}
+
+\begin{proof}
+Lemma~\ref{lem:supp_approx_score} gives
+\[
+\norm{\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})}_2
+=
+O_p(r_K)
+=
+o_p(1).
+\]
+Let \(s(\bbeta)\) denote the deterministic uniform limit of
+\(\bar S_K(\bbeta)\). Then
+\[
+\norm{s(\widehat{\bbeta}_{\mathrm{dec}})}_2
+\le
+\sup_{\bbeta\in\Theta}
+\norm{s(\bbeta)-\bar S_K(\bbeta)}_2
++
+\norm{\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})}_2
+=
+o_p(1).
+\]
+Identification therefore implies
+\[
+\widehat{\bbeta}_{\mathrm{dec}}
+\xrightarrow{p}
+\bbeta_0.
+\]
+
+Since \(\bar S_K(\widehat{\bbeta}_{\mathrm{cen}})=\bzero\), a first-order
+expansion between the centralized and decentralized estimators gives
+\[
+\bar S_K(\widehat{\bbeta}_{\mathrm{dec}})
+=
+-\bar B_K^*
+(\widehat{\bbeta}_{\mathrm{dec}}-\widehat{\bbeta}_{\mathrm{cen}})
++
+o_p\left(
+\norm{\widehat{\bbeta}_{\mathrm{dec}}-\widehat{\bbeta}_{\mathrm{cen}}}
+\right),
+\]
+where \(\bar B_K^*\xrightarrow{p}B_0\). Therefore,
+\[
+\norm{
+\widehat{\bbeta}_{\mathrm{dec}}
+-
+\widehat{\bbeta}_{\mathrm{cen}}
+}_2
+=
+O_p(r_K).
+\]
+\end{proof}
+
+\subsubsection{Proof of Theorem~\ref{thm:supp_dec_asymptotic}}
+
+\begin{proof}
+From Theorem~\ref{thm:supp_dec_consistency},
+\[
+\norm{
+\widehat{\bbeta}_{\mathrm{dec}}
+-
+\widehat{\bbeta}_{\mathrm{cen}}
+}_2
+=
+O_p(r_K).
+\]
+If \(r_K=o(K^{-1/2})\), then
+\[
+\sqrt K
+(\widehat{\bbeta}_{\mathrm{dec}}-\widehat{\bbeta}_{\mathrm{cen}})
+=
+o_p(1).
+\]
+Therefore,
+\[
+\sqrt K(\widehat{\bbeta}_{\mathrm{dec}}-\bbeta_0)
+=
+\sqrt K(\widehat{\bbeta}_{\mathrm{cen}}-\bbeta_0)
++
+o_p(1).
+\]
+The centralized asymptotic-normality result and Slutsky's theorem give
+\[
+\sqrt K(\widehat{\bbeta}_{\mathrm{dec}}-\bbeta_0)
+\xrightarrow{d}
+N\left(\bzero,B_0^{-1}M_0B_0^{-\trans}\right).
+\]
+\end{proof}
+
+
+\section{Decentralized simulation}
+\label{app:I}
+
+This appendix reports a simulation of the decentralized algorithm of Web
+Appendix~H. It was run before the correction and reference distribution of the
+main text were finalized. All intervals use the uncorrected site sandwich with a
+$t_{K-p}$ reference. The simulation therefore shows how consensus error affects
+estimation and inference. It does not evaluate the KC correction or the
+Bell--McCaffrey degrees of freedom under consensus.
+
+\emph{Design.} Outcomes followed the latent Gaussian design of the main text, with
+patient-level correlation 0.30 and site-level correlation
+$\rho_H\in\{0,0.1,0.2\}$. Sites had 10 to 30 patients with 2 to 6 visits each.
+The number of sites was $K\in\{5,10,15,25,50,100\}$, the average prevalence was
+0.07 or 0.30, and some scenarios added a binary site-level covariate ($p=3$).
+Each scenario had 200 to 400 replicates. Four networks were compared: a complete
+graph; a regional network, in which sites form groups of five around a regional
+hub and the hubs are fully connected; a ring in which each site is linked to its
+two nearest neighbors on each side; and a single hub linked to every site. Mixing
+weights were Metropolis--Hastings weights. Each consensus stage used $L=50$
+rounds.
+
+\emph{Results.} Web Table~\ref{tab:S_rho} gives the spectral quantity $\rho$ that
+governs consensus error, and Web Table~\ref{tab:S_dec} gives coverage and SE/SD
+by scenario. On the complete graph the decentralized results equalled the
+centralized results in every scenario. On the regional network they differed by at
+most 0.01 in coverage. The hub network matched the centralized results for
+$K\le25$, where $\rho^{50}\le0.13$. At $K=50$ its coverage fell to 0.795 to 0.913,
+and at $K=100$, where $\rho^{50}=0.61$, to 0.060 to 0.580. The estimate stayed
+within 0.1 of the true slope of 1, but this error was up to 2.9 standard
+deviations, and the standard errors were too small (SE/SD 0.51 to 0.63). The ring
+had $\rho^{50}=0.94$ at $K=100$ and covered at 0.905 to 0.953, compared with
+0.925 to 0.965 centrally. A fixed number of rounds is therefore adequate for some
+networks and not for others. The required number depends on $\rho$ and grows as
+the network becomes less connected.
+
+\input{tables/supp_dec_tables}
+
+\section{Full simulation results}
+\label{app:J}
+\label{sec:supp_sim}
+
+Tables~\ref{tab:S_cov} and~\ref{tab:S_sesd} report every scenario of the
+simulation study in the main text, without averaging. Prev.\ is the average
+outcome prevalence (0.07, 0.30, and 0.50 for $\beta_0=-3,-1,0$). CV is the
+coefficient of variation of site size. $t_{\mathrm{BM}}$ is the $t$ reference on
+score-space Bell--McCaffrey degrees of freedom. $t_{\mathrm{FG}}$ uses the degrees
+of freedom of Fay and Graubard. $t_\nu$ uses the effective-contributor count
+$(\sum_iq_{ij})^2/\sum_iq_{ij}^2$, where $q_{ij}$ is site $i$'s contribution
+to the corrected variance of coefficient $j$. It is shown for comparison. Its
+coverage was at least 0.95 in every scenario, because it uses the realized scores
+and understates the degrees of freedom. $\nu^{\mathrm{BM}}$ and $\nu^{\mathrm{FG}}$ are
+median degrees of freedom. All 117{,}000 replicates completed.
+
+{\footnotesize\setlength{\tabcolsep}{3pt}
+\input{tables/supp_sim_tables}
+}
+
+
+\section{VHA application: additional results}
+\label{app:K}
+\label{sec:supp_va}
+
+Web Table~\ref{tab:S_va} gives the VHA confidence intervals under the uncorrected
+sandwich with normal and Bell--McCaffrey references, the KC and FG corrections,
+FG with its own degrees of freedom, and CR2 with Satterthwaite degrees of freedom.
+The VISNs are nearly equal in size (CV 0.35), so the corrections change the
+standard errors by at most 12\%. Every column gives the same conclusion for every
+coefficient.
+
+\input{tables/supp_va_table}
+
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

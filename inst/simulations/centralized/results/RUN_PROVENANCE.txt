@@ -1,0 +1,20 @@
+Fed-GEE v2 simulation -- run provenance
+=======================================
+Collected      : 2026-09-27 19:23:12 EDT
+Project root   : /Users/soumik/Library/CloudStorage/OneDrive-UniversityofPittsburgh/Research/2026_fedGee/inst/simulations/sim_v3
+Result files   : 498
+Combined rows  : 3626980
+R version      : R version 4.4.1 (2024-06-14)
+
+Code checksums (md5):
+  01_fedgee_v3.R            4856d58c40a6ad5bc1294d9b1007ff84
+  00_simulation_config_v3.R    cd83bfa5e0781e4a3b733996b21a0444
+  02_run_cluster_v3.R       e9fdeb561c180e43f5e7155835ddca53
+
+Package versions:
+   geepack 1.3.13
+   lme4 2.0.1
+   dplyr 1.2.0
+   purrr 1.2.1
+   tibble 3.3.1
+   Matrix 1.7.4
